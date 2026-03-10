@@ -25,23 +25,25 @@ Run a single test file: `node --test test/scraper-helpers.test.js`
 
 ```bash
 bash deploy.sh                    # Full deploy: copies compose + .env, pulls image, restarts
-source deploy.config              # Load VPS connection vars (SERVER, SSH_KEY, DEPLOY_DIR)
+./manage-vps.sh                   # VPS management helper
+./manage-vps.sh logs              # Live container logs
+./manage-vps.sh status            # Container status + health
+./manage-vps.sh restart           # Restart containers
+./manage-vps.sh backup            # Download DB to backups/
+./manage-vps.sh restore <file>    # Upload DB backup and restart
+./manage-vps.sh ssh               # SSH into VPS
+./manage-vps.sh update            # Run deploy.sh
 ```
 
-**VPS**: Oracle Cloud arm64 at &lt;VPS_IP&gt; (Tailscale: localhost), deployed via `docker-compose.prod.yml`.
+**VPS**: Oracle Cloud arm64, deployed via `docker-compose.prod.yml`. Connection config in `deploy.config` (not committed).
 
-**Tailscale exit node**: App traffic routes through a Tailscale sidecar container using Pi5 (&lt;EXIT_NODE_IP&gt;) as exit node. This gives scrapers a residential IP instead of datacenter IP, which is critical — estate agent sites block/degrade datacenter IPs (missing images, empty results, captchas).
+**Tailscale exit node**: App traffic routes through a Tailscale sidecar container using a residential IP exit node. This is critical — estate agent sites block/degrade datacenter IPs (missing images, empty results, captchas).
 
 **Image**: Built by CI and pushed to `ghcr.io/enderekici/estate-agent:main`. Multi-arch (amd64 + arm64).
 
-**Redeploying after code changes**: Push to main → CI builds image → then on VPS pull and recreate:
-```bash
-ssh -i "$SSH_KEY" "$SERVER" "cd $DEPLOY_DIR && export IMAGE_TAG=main && docker compose -f docker-compose.prod.yml pull app && docker compose -f docker-compose.prod.yml up -d --force-recreate app"
-```
+**Redeploying after code changes**: Push to main → wait for CI → `./manage-vps.sh update`.
 
-**Clearing DB for fresh start**: `ssh -i "$SSH_KEY" "$SERVER" "rm -f $DEPLOY_DIR/data/listings.db"` then restart app.
-
-**Checking logs**: `ssh -i "$SSH_KEY" "$SERVER" "cd $DEPLOY_DIR && docker compose -f docker-compose.prod.yml logs app --tail 50"`
+**Clearing DB for fresh start**: `./manage-vps.sh ssh`, then `rm -f data/listings.db`, then restart.
 
 **Important**: `docker compose restart` does NOT reload `.env` changes — use `up -d --force-recreate` instead.
 
