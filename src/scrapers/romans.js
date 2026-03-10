@@ -98,7 +98,14 @@ async function scrape() {
             price:     priceEl ? priceEl.textContent.trim() : null,
             cardText:  titleEl ? titleEl.textContent.trim() : null,
             imageAlt:  imgEl ? (imgEl.alt || null) : null,
-            thumbnail: imgEl   ? imgEl.src               : null,
+            thumbnail: (() => {
+              const source = card.querySelector('picture source[srcset]');
+              if (source) {
+                const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+                if (first && !first.includes('.svg')) return first;
+              }
+              return imgEl ? (imgEl.currentSrc || imgEl.src || imgEl.getAttribute('data-src') || null) : null;
+            })(),
           });
         }
         return results;

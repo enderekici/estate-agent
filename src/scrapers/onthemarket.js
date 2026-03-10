@@ -1,5 +1,5 @@
 const { newPage, randomDelay } = require('./browser');
-const crypto = require('crypto');
+const { normalise, parsePrice } = require('./_localBase');
 const { buildOnTheMarketUrl } = require('./search-url-builders');
 
 const SOURCE = 'onthemarket';
@@ -86,7 +86,19 @@ async function scrape() {
           const priceMatch = fullText.match(/£([\d,]+)/);
           const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : null;
           const titleInfo = parseCardTitle(card.getAttribute('title'));
-          const imgEl = card.querySelector('img[src*="media.onthemarket.com/properties/"]');
+          const thumb = (() => {
+            const source = card.querySelector('picture source[srcset]');
+            if (source) {
+              const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            const imgs = Array.from(card.querySelectorAll('img'));
+            for (const img of imgs) {
+              const src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+              if (src && !src.includes('.svg') && !src.includes('logo') && src.includes('media.onthemarket.com')) return src;
+            }
+            return null;
+          })();
 
           return {
             url:       href,
@@ -94,12 +106,22 @@ async function scrape() {
             price,
             bedrooms:  titleInfo.bedrooms,
             prop_type: titleInfo.propType,
-            thumbnail: imgEl?.src || null,
+            thumbnail: thumb,
           };
         }).filter(r => r && r.url?.includes('/details/'));
       });
 
-      results.forEach(r => listings.push({ ...r, source: SOURCE, id: crypto.createHash('md5').update(r.url).digest('hex') }));
+      results.forEach(r => {
+        const listing = normalise({
+          url: r.url,
+          address: normalizeDeveloperAddress(r.address),
+          price: r.price,
+          bedrooms: r.bedrooms,
+          prop_type: r.prop_type,
+          thumbnail: r.thumbnail,
+        }, SOURCE);
+        if (listing.id) listings.push(listing);
+      });
 
       // OTM pagination
       const nextBtn = await page.$('a[rel="next"], [aria-label="Next page"], button[aria-label="Next"]');

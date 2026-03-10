@@ -41,7 +41,14 @@ async function scrape() {
           address:   h4?.textContent?.trim() || null,
           bedrooms:  h5?.textContent?.trim() || null,
           price:     priceSpan?.textContent?.trim() || null,
-          thumbnail: img?.src || null,
+          thumbnail: (() => {
+            const source = imgLink.querySelector('picture source[srcset]');
+            if (source) {
+              const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+          })(),
         };
       }).filter(Boolean);
     });

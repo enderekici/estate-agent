@@ -1,9 +1,10 @@
 const { newPage, randomDelay } = require('./browser');
 const { normalise, parsePrice, parseBeds } = require('./_localBase');
+const { buildKeatsfearnUrl } = require('./search-url-builders');
 
 const SOURCE = 'keatsfearn';
 // Use the full sales listings page (not the homepage slider)
-const URL = 'https://www.keatsfearn.co.uk/properties/sales#/';
+const URL = buildKeatsfearnUrl();
 
 function bedsFromUrl(url) {
   if (!url) return null;
@@ -45,7 +46,15 @@ async function scrape() {
         const priceEl = c.querySelector('p.price, [class*="primary-title"], [class*="price"]');
         // Address/description is a secondary element
         const addrEl  = c.querySelector('[class*="secondary"], [class*="address"], [class*="subtitle"], h3, p:not([class*="price"]):not([class*="primary"])');
-        const imgEl   = c.querySelector('img');
+        const thumb = (() => {
+          const source = c.querySelector('picture source[srcset]');
+          if (source) {
+            const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+            if (first && !first.includes('.svg')) return first;
+          }
+          const img = c.querySelector('img');
+          return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+        })();
         const infoIconValues = Array.from(c.querySelectorAll('.info-icons .d-inline-block'))
           .map((el) => el.textContent?.trim() || '')
           .filter(Boolean);
@@ -56,7 +65,7 @@ async function scrape() {
           address:   addrEl?.textContent?.trim(),
           bedrooms:  infoIconValues[0] || null,
           cardText:  c.textContent?.replace(/\s+/g, ' ').trim() || null,
-          thumbnail: imgEl?.src,
+          thumbnail: thumb,
         };
       }).filter(Boolean);
     });

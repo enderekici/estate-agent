@@ -51,7 +51,14 @@ async function scrape() {
           url:       href,
           address:   addressEl?.textContent?.trim() || null,
           price:     priceEl?.textContent?.trim() || null,
-          thumbnail: img?.src || null,
+          thumbnail: (() => {
+            const source = card.querySelector('picture source[srcset]');
+            if (source) {
+              const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+          })(),
         };
       }).filter(Boolean);
     });

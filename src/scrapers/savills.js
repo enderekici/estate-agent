@@ -1,10 +1,11 @@
 const { newPage, randomDelay } = require('./browser');
 const { normalise, parsePrice, parseBeds } = require('./_localBase');
+const { buildSavillsUrl } = require('./search-url-builders');
 
 const SOURCE = 'savills';
 // Use search.savills.com which renders results correctly
 // Id_40145 = Farnham, Category_TownVillageCity; GRS_B_3 = 3+ bedrooms; GRS_T_B = buy
-const URL = 'https://search.savills.com/list?SearchList=Id_40145+Category_TownVillageCity&Tenure=GRS_T_B&SortOrder=SO_PCDD&Currency=GBP&PropertyTypes=GRS_PT_H,GRS_PT_ND,GRS_PT_B,GRS_PT_CTTG&Bedrooms=GRS_B_3&Category=GRS_CAT_RES';
+const URL = buildSavillsUrl();
 
 function isFarnhamArea(address) {
   const text = String(address || '').toUpperCase();

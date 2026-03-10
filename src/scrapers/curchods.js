@@ -1,8 +1,9 @@
 const { newPage, randomDelay } = require('./browser');
-const { normalise, parsePrice, parseBeds } = require('./_localBase');
+const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
+const { buildCurchodsUrl } = require('./search-url-builders');
 
 const SOURCE = 'curchods';
-const BASE_URL = 'https://curchods.com/houses-for-sale-in/Farnham/paged/1/?attr=1&min=0&max=650000&bmin=3&bmax=0&sortby=HL&added=anytime';
+const BASE_URL = buildCurchodsUrl();
 
 async function scrape() {
   const page = await newPage();
@@ -42,7 +43,15 @@ async function scrape() {
           const priceEl = card.querySelector('.property-card-price');
           const townEl  = card.querySelector('.property-card-town');
           const roomsEl = card.querySelector('.property-card-rooms');
-          const img     = card.querySelector('img');
+          const thumb = (() => {
+            const source = card.querySelector('picture source[srcset]');
+            if (source) {
+              const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            const img = card.querySelector('img');
+            return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+          })();
 
           return {
             url,
@@ -50,7 +59,7 @@ async function scrape() {
             address:  townEl ? townEl.textContent.trim() + ', Surrey' : null,
             price:    priceEl?.textContent?.trim() || null,
             bedrooms: roomsEl?.textContent?.trim() || null,
-            thumbnail: img?.src || null,
+            thumbnail: thumb,
           };
         }).filter(Boolean);
       });
@@ -61,7 +70,7 @@ async function scrape() {
         ...r,
         price:    parsePrice(r.price),
         bedrooms: parseBeds(r.bedrooms || ''),
-        prop_type: 'House',
+        prop_type: inferPropertyType(r.bedrooms, r.address),
       }, SOURCE)));
 
       // Check for next page link

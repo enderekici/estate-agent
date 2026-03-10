@@ -1,5 +1,5 @@
 const { newPage, randomDelay } = require('./browser');
-const { normalise, parsePrice, parseBeds } = require('./_localBase');
+const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
 const { buildBourneUrl } = require('./search-url-builders');
 
 const SOURCE = 'bourne';
@@ -57,7 +57,15 @@ async function scrape() {
           price:     (card?.querySelector('[class*="price"]') || {}).textContent?.trim() || null,
           bedrooms:  (card?.querySelector('[class*="bed"]') || {}).textContent?.trim() || null,
           cardText:  card?.textContent?.replace(/\s+/g, ' ').trim() || null,
-          thumbnail: (card?.querySelector('img') || {}).src || null,
+          thumbnail: (() => {
+            const source = card?.querySelector('picture source[srcset]');
+            if (source) {
+              const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            const img = card?.querySelector('img');
+            return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+          })(),
         };
       }).filter(Boolean);
     });
@@ -65,6 +73,7 @@ async function scrape() {
     raw.forEach(r => listings.push(normalise({
       ...r, price: parsePrice(r.price),
       bedrooms: parseBeds(`${r.bedrooms || ''} ${r.address || ''} ${r.cardText || ''}`) ?? bedsFromUrl(r.url),
+      prop_type: inferPropertyType(r.cardText, r.address, r.url),
     }, SOURCE)));
 
     // Bourne listing cards often omit bed count; enrich by visiting detail pages as needed.

@@ -1,5 +1,5 @@
 const { loadPage, resolveUrl } = require('./http');
-const { normalise, parsePrice, parseBeds } = require('./_localBase');
+const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
 const { buildAndrewLodgeUrl } = require('./search-url-builders');
 
 const SOURCE = 'andrewlodge';
@@ -31,17 +31,26 @@ async function scrape() {
       const address = stripTags(parts[0]) || null;
       const priceText = stripTags(parts[1] || '') || null;
 
-      const imgEl = a.find('img');
-      const imgSrc = imgEl.attr('src') || '';
-      const thumbnail = imgSrc && !imgSrc.startsWith('data:')
-        ? imgSrc
-        : (imgEl.attr('data-src') || null);
+      const sourceEl = a.find('picture source[srcset]');
+      let thumbnail = null;
+      if (sourceEl.length) {
+        const first = (sourceEl.attr('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+        if (first && !first.includes('.svg')) thumbnail = first;
+      }
+      if (!thumbnail) {
+        const imgEl = a.find('img');
+        const imgSrc = imgEl.attr('src') || '';
+        thumbnail = imgSrc && !imgSrc.startsWith('data:')
+          ? imgSrc
+          : (imgEl.attr('data-src') || null);
+      }
 
       listings.push(normalise({
         url,
         price: parsePrice(priceText),
         address,
         bedrooms: parseBeds(h4Text),
+        prop_type: inferPropertyType(h4Text),
         thumbnail,
       }, SOURCE));
     });

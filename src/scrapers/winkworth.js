@@ -1,8 +1,9 @@
 const { newPage, randomDelay } = require('./browser');
-const { normalise, parsePrice, parseBeds } = require('./_localBase');
+const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
+const { buildWinkworthUrl } = require('./search-url-builders');
 
 const SOURCE = 'winkworth';
-const URL = 'https://www.winkworth.co.uk/surrey/farnham/properties-for-sale?min_beds=3';
+const URL = buildWinkworthUrl();
 
 async function scrape() {
   const page = await newPage();
@@ -46,14 +47,22 @@ async function scrape() {
         const priceEl = card?.querySelector('[class*="price"]') || card?.nextElementSibling?.querySelector('[class*="price"]');
         const addrEl  = card?.querySelector('h2, h3, address, [class*="address"]');
         const bedsEl  = card?.querySelector('[class*="bed"]');
-        const imgEl   = card?.querySelector('img');
+        const thumb = (() => {
+          const source = card?.querySelector('picture source[srcset]');
+          if (source) {
+            const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+            if (first && !first.includes('.svg')) return first;
+          }
+          const img = card?.querySelector('img');
+          return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+        })();
 
         cards.push({
           url:       href,
           address:   addrEl ? addrEl.textContent.trim() : null,
           price:     priceEl ? priceEl.textContent.trim() : null,
           bedrooms:  bedsEl  ? bedsEl.textContent.trim()  : null,
-          thumbnail: imgEl   ? (imgEl.src || imgEl.dataset.src) : null,
+          thumbnail: thumb,
         });
       });
       return cards;
@@ -62,6 +71,7 @@ async function scrape() {
     raw.forEach(r => listings.push(normalise({
       ...r, price: parsePrice(r.price),
       bedrooms: parseBeds((r.bedrooms || '') + ' ' + (r.address || '')),
+      prop_type: inferPropertyType(r.bedrooms, r.address, r.url),
     }, SOURCE)));
   } catch (err) {
     console.error(`[${SOURCE}] Error:`, err.message);

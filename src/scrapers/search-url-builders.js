@@ -20,6 +20,7 @@ function buildOnTheMarketUrl() {
   const search = getSearchParams();
   const params = new URLSearchParams();
   if (search.minBedrooms) params.set('min-bedrooms', String(search.minBedrooms));
+  if (search.maxPrice) params.set('max-price', String(search.maxPrice));
   return `https://www.onthemarket.com/for-sale/property/${search.locationSlug}/?${params.toString()}`;
 }
 
@@ -45,6 +46,7 @@ function buildRomansUrl() {
   const search = getSearchParams();
   const params = new URLSearchParams();
   if (search.minBedrooms) params.set('min_bedrooms', String(search.minBedrooms));
+  if (search.maxPrice) params.set('max_price', String(search.maxPrice));
   return `https://www.romans.co.uk/properties/for-sale/in-${search.locationSlug}/?${params.toString()}`;
 }
 
@@ -75,6 +77,7 @@ function buildBourneUrl() {
     address_keyword: search.locationSlug,
     minimum_bedrooms: String(search.minBedrooms || 0),
   });
+  if (search.maxPrice) params.set('maximum_price', String(search.maxPrice));
   return `https://bourneestateagents.com/search/?${params.toString()}`;
 }
 
@@ -93,12 +96,15 @@ function buildAndrewLodgeUrl() {
     minimum_bedrooms: String(search.minBedrooms || 0),
     orderby: 'price_desc',
   });
+  if (search.maxPrice) params.set('maximum_price', String(search.maxPrice));
   return `https://andrewlodge.net/property-for-sale-in-${search.locationSlug}/?${params.toString()}`;
 }
 
 function buildHamptonsUrl() {
   const search = getSearchParams();
-  return `https://www.hamptons.co.uk/properties/sales/text-${search.locationSlug}/from-${search.minBedrooms || 0}-bed`;
+  let url = `https://www.hamptons.co.uk/properties/sales/text-${search.locationSlug}/from-${search.minBedrooms || 0}-bed`;
+  if (search.maxPrice) url += `/under-${search.maxPrice}`;
+  return url;
 }
 
 function buildCurchodsUrl() {
@@ -119,7 +125,28 @@ function buildWinkworthUrl() {
   const search = getSearchParams();
   const params = new URLSearchParams();
   if (search.minBedrooms) params.set('min_beds', String(search.minBedrooms));
+  if (search.maxPrice) params.set('max_price', String(search.maxPrice));
   return `https://www.winkworth.co.uk/${search.county.toLowerCase()}/${search.locationSlug}/properties-for-sale?${params.toString()}`;
+}
+
+function buildKeatsfearnUrl() {
+  return 'https://www.keatsfearn.co.uk/properties/sales#/';
+}
+
+function buildSavillsUrl() {
+  const search = getSearchParams();
+  const bedsCode = search.minBedrooms ? `GRS_B_${search.minBedrooms}` : 'GRS_B_3';
+  return `https://search.savills.com/list?SearchList=Id_40145+Category_TownVillageCity&Tenure=GRS_T_B&SortOrder=SO_PCDD&Currency=GBP&PropertyTypes=GRS_PT_H,GRS_PT_ND,GRS_PT_B,GRS_PT_CTTG&Bedrooms=${bedsCode}&Category=GRS_CAT_RES`;
+}
+
+function buildTruemangrundyUrl() {
+  const search = getSearchParams();
+  const params = new URLSearchParams({
+    department: 'residential-sales',
+    minimum_bedrooms: String(search.minBedrooms || 3),
+  });
+  if (search.maxPrice) params.set('maximum_price', String(search.maxPrice));
+  return `https://www.truemanandgrundy.co.uk/property/?${params.toString()}`;
 }
 
 module.exports = {
@@ -130,8 +157,11 @@ module.exports = {
   buildCurchodsUrl,
   buildGreenwoodUrl,
   buildHamptonsUrl,
+  buildKeatsfearnUrl,
   buildOnTheMarketUrl,
   buildRomansUrl,
+  buildSavillsUrl,
+  buildTruemangrundyUrl,
   buildWinkworthUrl,
   buildWprUrl,
   buildZooplaUrl,

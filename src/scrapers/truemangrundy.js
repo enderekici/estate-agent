@@ -1,5 +1,6 @@
 const { loadPage, resolveUrl } = require('./http');
 const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
+const { buildTruemangrundyUrl } = require('./search-url-builders');
 
 const SOURCE = 'truemangrundy';
 // WPPF (WordPress Property Feed Pro) theme — grid view, server-rendered PHP
@@ -8,7 +9,7 @@ const SOURCE = 'truemangrundy';
 // Price: h6 (e.g. "Price Guide £675,000")
 // Bedrooms: h5 (e.g. "3 Bed  House - detached")
 // Thumbnail: figure img
-const URL = 'https://www.truemanandgrundy.co.uk/property/?department=residential-sales&minimum_bedrooms=3';
+const URL = buildTruemangrundyUrl();
 const BASE = 'https://www.truemanandgrundy.co.uk';
 
 async function scrape() {
@@ -32,7 +33,14 @@ async function scrape() {
         price: parsePrice(c.find('h6').text().trim()),
         bedrooms: parseBeds(bedsText),
         prop_type: inferPropertyType(bedsText, linkEl.text(), rawHref),
-        thumbnail: imgEl.attr('src') || imgEl.attr('data-src') || null,
+        thumbnail: (() => {
+          const sourceEl = c.find('picture source[srcset]');
+          if (sourceEl.length) {
+            const first = (sourceEl.attr('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+            if (first && !first.includes('.svg')) return first;
+          }
+          return imgEl.attr('src') || imgEl.attr('data-src') || null;
+        })(),
       }, SOURCE));
     });
   } catch (err) {

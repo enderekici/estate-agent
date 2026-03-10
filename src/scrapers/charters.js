@@ -43,8 +43,10 @@ async function scrape() {
   const page = await newPage();
   const listings = [];
   try {
-    await page.goto(URL, { waitUntil: 'networkidle', timeout: 35000 });
-    await page.waitForTimeout(3000);
+    await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
+    try {
+      await page.waitForSelector('a[href*="/property-for-sale/"]', { timeout: 15000 });
+    } catch (_) {}
 
     const raw = await page.evaluate(() => {
       // Merge image link + text link by href
@@ -54,9 +56,16 @@ async function scrape() {
         if (!href || !href.includes('chartersestateagents')) return;
         if (!map[href]) map[href] = { href, imgSrc: null, imgAlt: '', text: '' };
         const img = a.querySelector('img');
-        if (img && img.src && !map[href].imgSrc) {
-          map[href].imgSrc = img.src;
-          map[href].imgAlt = img.alt || '';
+        if (!map[href].imgSrc) {
+          const source = a.querySelector('picture source[srcset]');
+          if (source) {
+            const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+            if (first && !first.includes('.svg')) map[href].imgSrc = first;
+          }
+          if (!map[href].imgSrc && img) {
+            map[href].imgSrc = img.currentSrc || img.src || img.getAttribute('data-src') || null;
+          }
+          if (img) map[href].imgAlt = img.alt || '';
         }
         const text = a.textContent.trim();
         if (text.length > map[href].text.length) map[href].text = text;
