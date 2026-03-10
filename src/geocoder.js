@@ -305,20 +305,31 @@ async function queryNominatim(query) {
       await waitForProvider('nominatim');
       markProviderRequest('nominatim');
       const res = await axios.get(NOMINATIM_URL, {
-        params: { q: query, format: 'json', limit: 1, countrycodes: 'gb' },
+        params: { q: query, format: 'json', limit: 3, countrycodes: 'gb', viewbox: '-0.90,51.30,-0.70,51.15', bounded: 0 },
         headers: NOMINATIM_HEADERS,
         timeout: NOMINATIM_TIMEOUT_MS,
       });
 
       if (res.data && res.data.length > 0) {
-        const { lat, lon } = res.data[0];
+        // Pick result closest to Farnham area
+        const farnhamLat = 51.2152;
+        const farnhamLng = -0.7982;
+        let best = res.data[0];
+        let bestDist = Infinity;
+        for (const r of res.data) {
+          const dLat = parseFloat(r.lat) - farnhamLat;
+          const dLon = parseFloat(r.lon) - farnhamLng;
+          const dist = dLat * dLat + dLon * dLon;
+          if (dist < bestDist) { bestDist = dist; best = r; }
+        }
+        const { lat, lon } = best;
         const result = {
           lat: parseFloat(lat),
           lng: parseFloat(lon),
-          displayName: String(res.data[0].display_name || ''),
-          addresstype: String(res.data[0].addresstype || ''),
-          type: String(res.data[0].type || ''),
-          category: String(res.data[0].class || ''),
+          displayName: String(best.display_name || ''),
+          addresstype: String(best.addresstype || ''),
+          type: String(best.type || ''),
+          category: String(best.class || ''),
         };
         queryCache.set(cacheKey, result);
         return result;
@@ -351,14 +362,27 @@ async function queryPhoton(query) {
       await waitForProvider('photon');
       markProviderRequest('photon');
       const res = await axios.get(PHOTON_URL, {
-        params: { q: query, limit: 1 },
+        params: { q: query, limit: 3 },
         headers: NOMINATIM_HEADERS,
         timeout: NOMINATIM_TIMEOUT_MS,
       });
 
-      const feature = res.data?.features?.[0];
-      if (feature?.geometry?.coordinates?.length >= 2) {
-        const props = feature.properties || {};
+      const features = (res.data?.features || []).filter(
+        (f) => f?.geometry?.coordinates?.length >= 2
+      );
+      if (features.length > 0) {
+        // Pick result closest to Farnham area
+        const farnhamLat = 51.2152;
+        const farnhamLng = -0.7982;
+        let bestFeature = features[0];
+        let bestDist = Infinity;
+        for (const f of features) {
+          const dLat = parseFloat(f.geometry.coordinates[1]) - farnhamLat;
+          const dLon = parseFloat(f.geometry.coordinates[0]) - farnhamLng;
+          const dist = dLat * dLat + dLon * dLon;
+          if (dist < bestDist) { bestDist = dist; bestFeature = f; }
+        }
+        const props = bestFeature.properties || {};
         const displayName = [
           props.name,
           props.street,
@@ -369,8 +393,8 @@ async function queryPhoton(query) {
           props.country,
         ].filter(Boolean).join(', ');
         const result = {
-          lat: parseFloat(feature.geometry.coordinates[1]),
-          lng: parseFloat(feature.geometry.coordinates[0]),
+          lat: parseFloat(bestFeature.geometry.coordinates[1]),
+          lng: parseFloat(bestFeature.geometry.coordinates[0]),
           displayName,
           addresstype: String(props.type || props.osm_value || ''),
           type: String(props.type || props.osm_value || ''),
@@ -456,6 +480,15 @@ async function geocode(address) {
         }
 
         const coords = { lat: result.lat, lng: result.lng };
+
+        // Reject results far from Farnham area (> ~5 miles)
+        const dLat = result.lat - 51.2152;
+        const dLon = result.lng - (-0.7982);
+        const approxMiles = Math.sqrt(dLat * dLat + dLon * dLon) * 69; // rough miles
+        if (approxMiles > 5) {
+          continue; // try next query
+        }
+
         geocodeCache.set(key, coords);
         return coords;
       }

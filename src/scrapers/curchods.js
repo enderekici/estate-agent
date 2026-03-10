@@ -5,6 +5,25 @@ const { buildCurchodsUrl } = require('./search-url-builders');
 const SOURCE = 'curchods';
 const BASE_URL = buildCurchodsUrl();
 
+// Parse address from URL slug: /display/3-bedroom-house-high-street-farnham → "High Street, Farnham"
+function parseAddressFromSlug(url) {
+  const match = url.match(/\/display\/(.+?)(?:\?|$)/);
+  if (!match) return null;
+  const slug = match[1];
+
+  // Remove common prefixes like "3-bedroom-house-for-sale-in-"
+  const cleaned = slug
+    .replace(/^\d+-bedroom[s]?-[a-z]+-(?:for-sale-)?(?:in-)?/i, '')
+    .replace(/-+/g, ' ')
+    .trim();
+
+  if (!cleaned || cleaned.length < 5) return null;
+
+  // Title case the words
+  const titleCased = cleaned.replace(/\b\w/g, c => c.toUpperCase());
+  return titleCased + ', Surrey';
+}
+
 async function scrape() {
   const page = await newPage();
   const listings = [];
@@ -65,6 +84,14 @@ async function scrape() {
       });
 
       if (!raw.length) { hasMore = false; break; }
+
+      // Enhance addresses from URL slugs
+      raw.forEach(r => {
+        const slugAddr = parseAddressFromSlug(r.url);
+        if (slugAddr && slugAddr.length > (r.address || '').length) {
+          r.address = slugAddr;
+        }
+      });
 
       raw.forEach(r => listings.push(normalise({
         ...r,

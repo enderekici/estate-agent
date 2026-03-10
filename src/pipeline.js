@@ -10,21 +10,21 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // Per-source URL patterns — only store URLs that match a real property detail page
 const VALID_URL_PATTERNS = {
-  rightmove:     /rightmove\.co\.uk\/properties\/\d+/,
-  zoopla:        /zoopla\.co\.uk\/for-sale\/details\/\d+/,
-  onthemarket:   /onthemarket\.com\/(details|for-sale\/property)\//,
-  bridges:       /bridges\.co\.uk\/property\/[a-z0-9]/,
-  winkworth:     /winkworth\.co\.uk\/properties\/sales\//,
-  romans:        /romans\.co\.uk\/properties-for-sale\//,
-  hamptons:      /hamptons\.co\.uk\/properties\/\d+/,
-  keatsfearn:    /keatsfearn\.co\.uk\/properties\/\d+/,
-  truemangrundy: /truemanandgrundy\.co\.uk\/property\/[a-z0-9]/,
-  savills:       /search\.savills\.com\/property-detail\//,
-  andrewlodge:   /andrewlodge\.net\/properties\/sale\//,
-  bourne:        /bourneestateagents\.com\/property\//,
-  charters:      /chartersestateagents\.co\.uk\/property-for-sale\//,
-  curchods:      /curchods\.com\/display\//,
-  wpr:           /wpr\.co\.uk\/properties\/sale\//,
+  rightmove:     /rightmove\.co\.uk\/properties\/\d+/i,
+  zoopla:        /zoopla\.co\.uk\/for-sale\/details\/\d+/i,
+  onthemarket:   /onthemarket\.com\/(details|for-sale\/property)\//i,
+  bridges:       /bridges\.co\.uk\/property\/[a-z0-9]/i,
+  winkworth:     /winkworth\.co\.uk\/properties\/sales\//i,
+  romans:        /romans\.co\.uk\/properties-for-sale\//i,
+  hamptons:      /hamptons\.co\.uk\/properties\/\d+/i,
+  keatsfearn:    /keatsfearn\.co\.uk\/properties\/\d+/i,
+  truemangrundy: /truemanandgrundy\.co\.uk\/property\/[a-z0-9]/i,
+  savills:       /search\.savills\.com\/property-detail\//i,
+  andrewlodge:   /andrewlodge\.net\/properties\/sale\//i,
+  bourne:        /bourneestateagents\.com\/property\//i,
+  charters:      /chartersestateagents\.co\.uk\/property-for-sale\//i,
+  curchods:      /curchods\.com\/display\//i,
+  wpr:           /wpr\.co\.uk\/properties\/sale\//i,
 };
 
 function isValidPropertyUrl(source, url) {

@@ -63,9 +63,9 @@ function canonicaliseUrl(url) {
 
   const isRelative = parsed.origin === 'https://placeholder.invalid';
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-  const path = (parsed.pathname || '/')
+  const path = ((parsed.pathname || '/')
     .replace(/\/{2,}/g, '/')
-    .replace(/\/+$/, '') || '/';
+    .replace(/\/+$/, '') || '/').toLowerCase();
 
   const kept = [];
   for (const [key, value] of parsed.searchParams.entries()) {

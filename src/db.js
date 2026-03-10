@@ -112,8 +112,8 @@ function normalizeAddressForDedupe(address) {
 }
 
 function deduplicateListings() {
-  // Find listings with same price and bedrooms, check if address is similar enough
-  const candidates = db.prepare(`
+  // Strategy 1: Find listings with same price and bedrooms, check address similarity
+  const priceBedCandidates = db.prepare(`
     SELECT a.id as aid, a.address as aaddr, a.source as asrc, a.first_seen as afirst,
            a.prop_type as atype, a.thumbnail as athumb,
            b.id as bid, b.address as baddr, b.source as bsrc, b.first_seen as bfirst,
@@ -131,7 +131,29 @@ function deduplicateListings() {
       AND a.bedrooms IS NOT NULL
   `).all();
 
+  // Strategy 2: Find cross-source listings with exact same normalized address
+  // (catches duplicates where price or bedrooms is NULL on one side)
+  const addressCandidates = db.prepare(`
+    SELECT a.id as aid, a.address as aaddr, a.source as asrc, a.first_seen as afirst,
+           a.prop_type as atype, a.thumbnail as athumb, a.price as aprice, a.bedrooms as abeds,
+           b.id as bid, b.address as baddr, b.source as bsrc, b.first_seen as bfirst,
+           b.prop_type as btype, b.thumbnail as bthumb, b.price as bprice, b.bedrooms as bbeds
+    FROM listings a JOIN listings b
+      ON a.source != b.source
+      AND (
+        a.first_seen < b.first_seen OR
+        (a.first_seen = b.first_seen AND a.id < b.id)
+      )
+      AND a.duplicate_of IS NULL
+      AND b.duplicate_of IS NULL
+      AND a.address IS NOT NULL
+      AND b.address IS NOT NULL
+      AND (a.price IS NULL OR b.price IS NULL OR a.price = b.price)
+      AND (a.bedrooms IS NULL OR b.bedrooms IS NULL OR a.bedrooms = b.bedrooms)
+  `).all();
+
   let merged = 0;
+  const alreadyMerged = new Set();
   const stmtDup = db.prepare('UPDATE listings SET duplicate_of=? WHERE id=?');
   const stmtBackfill = db.prepare(`
     UPDATE listings SET
@@ -141,13 +163,15 @@ function deduplicateListings() {
   `);
 
   function markDuplicate(row) {
+    if (alreadyMerged.has(row.bid)) return;
     stmtDup.run(row.aid, row.bid);
-    // Backfill missing fields on the canonical listing from the duplicate
     stmtBackfill.run(row.btype, row.bthumb, row.aid);
+    alreadyMerged.add(row.bid);
     merged++;
   }
 
-  for (const row of candidates) {
+  // Process price+beds matches (existing logic)
+  for (const row of priceBedCandidates) {
     if (!row.aaddr || !row.baddr) continue;
     const a = normalizeAddressForDedupe(row.aaddr);
     const b = normalizeAddressForDedupe(row.baddr);
@@ -158,7 +182,6 @@ function deduplicateListings() {
       continue;
     }
 
-    // Consider duplicates if they share significant common words
     const wordsA = new Set(a.split(' ').filter(w => w.length > 3));
     const wordsB = new Set(b.split(' ').filter(w => w.length > 3));
     const common = [...wordsA].filter(w => wordsB.has(w));
@@ -166,6 +189,18 @@ function deduplicateListings() {
       markDuplicate(row);
     }
   }
+
+  // Process address-only matches (catches NULL price/beds cases)
+  for (const row of addressCandidates) {
+    const a = normalizeAddressForDedupe(row.aaddr);
+    const b = normalizeAddressForDedupe(row.baddr);
+    if (!a || !b || a.length < 10) continue; // skip very short addresses like "farnham surrey"
+
+    if (a === b) {
+      markDuplicate(row);
+    }
+  }
+
   return merged;
 }
 
