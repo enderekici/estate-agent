@@ -26,10 +26,10 @@ async function getLocationId() {
       !l.locationIdentifier?.includes('STATION')
     ) || locations.find(l => l.displayName?.toLowerCase().includes(search.location.toLowerCase()));
     console.log(`[rightmove] Location: ${match?.displayName} → ${match?.locationIdentifier}`);
-    return match?.locationIdentifier || 'OUTCODE^1042';
+    return match?.locationIdentifier || 'OUTCODE^2576';
   } catch (err) {
-    console.warn(`[rightmove] Could not resolve location ID for ${search.locationQuery}, using fallback OUTCODE^1042`);
-    return 'OUTCODE^1042';
+    console.warn(`[rightmove] Could not resolve location ID for ${search.locationQuery}, using fallback OUTCODE^2576`);
+    return 'OUTCODE^2576';
   }
 }
 

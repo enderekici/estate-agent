@@ -1,43 +1,42 @@
-const { newPage, randomDelay } = require('./browser');
+const { loadPage, resolveUrl } = require('./http');
 const { normalise, parsePrice, parseBeds } = require('./_localBase');
 const { buildGreenwoodUrl } = require('./search-url-builders');
 
 const SOURCE = 'greenwood';
-const URL = buildGreenwoodUrl();
+const BASE_URL = buildGreenwoodUrl();
+const BASE = 'https://www.greenwood-property.co.uk';
 
 async function scrape() {
-  const page = await newPage();
   const listings = [];
   try {
-    await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await randomDelay();
+    const $ = await loadPage(BASE_URL);
 
-    try {
-      await page.waitForSelector('article.property, .property-item', { timeout: 8000 });
-    } catch (_) {}
+    $('article.property, .property-item, li.property').each((_, el) => {
+      const c = $(el);
+      const linkEl = c.find('a[href*="/property/"]').first();
+      const fallback = linkEl.length ? linkEl : c.find('a').first();
+      const rawHref = fallback.attr('href') || '';
+      const url = resolveUrl(BASE, rawHref);
+      if (!url || !url.includes('/property/')) return;
 
-    const raw = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll(
-        'article.property, .property-item, [class*="property-card"], li.property'
-      ));
-      return cards.map(c => ({
-        url:       (c.querySelector('a[href*="/property/"]') || c.querySelector('a') || {}).href || null,
-        address:   (c.querySelector('h2, h3, [class*="address"], [class*="title"]') || {}).textContent?.trim(),
-        price:     (c.querySelector('[class*="price"]') || {}).textContent?.trim(),
-        bedrooms:  (c.querySelector('[class*="bed"]') || {}).textContent?.trim(),
-        prop_type: (c.querySelector('[class*="type"]') || {}).textContent?.trim(),
-        thumbnail: (c.querySelector('img') || {}).src,
-      })).filter(r => r.url && r.url.includes('/property/'));
+      const address = c.find('h2, h3').first().text().trim()
+        || c.find('[class*="address"]').first().text().trim()
+        || c.find('[class*="title"]').first().text().trim()
+        || null;
+
+      listings.push(normalise({
+        url,
+        address,
+        price: parsePrice(c.find('[class*="price"]').first().text().trim()),
+        bedrooms: parseBeds(
+          (c.find('[class*="bed"]').first().text().trim() || '') + ' ' + (address || '')
+        ),
+        prop_type: c.find('[class*="type"]').first().text().trim() || null,
+        thumbnail: c.find('img').attr('src') || null,
+      }, SOURCE));
     });
-
-    raw.forEach(r => listings.push(normalise({
-      ...r, price: parsePrice(r.price),
-      bedrooms: parseBeds((r.bedrooms || '') + ' ' + (r.address || '')),
-    }, SOURCE)));
   } catch (err) {
     console.error(`[${SOURCE}] Error:`, err.message);
-  } finally {
-    await page.context().close();
   }
   return listings;
 }

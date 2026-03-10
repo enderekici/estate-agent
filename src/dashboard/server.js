@@ -109,6 +109,10 @@ app.get('/api/listings/:id/duplicates', (req, res) => {
   res.json(rows);
 });
 
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, uptime: Math.floor(process.uptime()) });
+});
+
 // ── Start ──────────────────────────────────────────────────────────────────
 
 let server = null;

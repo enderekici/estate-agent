@@ -25,7 +25,7 @@ async function sendNewListing(listing) {
   const b = getBot();
   if (!b || !config.telegram.chatId) {
     console.warn('Telegram not configured — skipping notification');
-    return;
+    return false;
   }
 
   const dSchool = listing.dist_school !== null ? formatDistance(listing.dist_school) : '?';
@@ -54,12 +54,15 @@ async function sendNewListing(listing) {
     } else {
       await b.sendMessage(config.telegram.chatId, caption, { parse_mode: 'Markdown' });
     }
+    return true;
   } catch (err) {
     // Fallback without photo if image fails
     try {
       await b.sendMessage(config.telegram.chatId, caption, { parse_mode: 'Markdown' });
+      return true;
     } catch (e) {
       console.error('Telegram send failed:', e.message);
+      return false;
     }
   }
 }

@@ -239,6 +239,7 @@ function logRun(source, startedAt, finishedAt, found, newCount, error = null) {
     INSERT INTO scrape_runs (source, started_at, finished_at, found, new_count, error)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(source, startedAt, finishedAt, found, newCount, error);
+  db.prepare("DELETE FROM scrape_runs WHERE started_at < datetime('now', '-60 days')").run();
 }
 
 function isNew(url) {

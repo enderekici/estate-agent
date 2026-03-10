@@ -85,8 +85,8 @@ async function notifyMatches() {
 
   console.log(`\nSending ${pending.length} Telegram notifications...`);
   for (const listing of pending) {
-    await sendNewListing(listing);
-    markNotified(listing.id);
+    const sent = await sendNewListing(listing);
+    if (sent) markNotified(listing.id);
     await sleep(500);
   }
 }

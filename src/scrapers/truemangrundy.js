@@ -1,54 +1,42 @@
-const { newPage, randomDelay } = require('./browser');
+const { loadPage, resolveUrl } = require('./http');
 const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
 
 const SOURCE = 'truemangrundy';
-// WPPF (WordPress Property Feed Pro) theme — grid view
+// WPPF (WordPress Property Feed Pro) theme — grid view, server-rendered PHP
 // Cards: article.wppf_property_item
 // URL/Address: h4 a (bookmark link inside card)
 // Price: h6 (e.g. "Price Guide £675,000")
 // Bedrooms: h5 (e.g. "3 Bed  House - detached")
 // Thumbnail: figure img
 const URL = 'https://www.truemanandgrundy.co.uk/property/?department=residential-sales&minimum_bedrooms=3';
+const BASE = 'https://www.truemanandgrundy.co.uk';
 
 async function scrape() {
-  const page = await newPage();
   const listings = [];
   try {
-    await page.goto(URL, { waitUntil: 'networkidle', timeout: 45000 });
-    await randomDelay();
+    const $ = await loadPage(URL);
 
-    const raw = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll('article.wppf_property_item'));
-      return cards.map(c => {
-        const linkEl  = c.querySelector('h4 a[href*="/property/"]');
-        const href    = linkEl?.href;
-        if (!href) return null;
+    $('article.wppf_property_item').each((_, el) => {
+      const c = $(el);
+      const linkEl = c.find('h4 a[href*="/property/"]');
+      const rawHref = linkEl.attr('href') || '';
+      if (!rawHref) return;
+      const url = resolveUrl(BASE, rawHref);
 
-        const addrEl  = linkEl; // h4 a text is the address
-        const priceEl = c.querySelector('h6');
-        const bedsEl  = c.querySelector('h5');
-        const imgEl   = c.querySelector('figure img');
+      const bedsText = c.find('h5').text().trim();
+      const imgEl = c.find('figure img');
 
-        return {
-          url:       href,
-          address:   addrEl?.textContent?.trim() || null,
-          price:     priceEl?.textContent?.trim() || null,
-          bedrooms:  bedsEl?.textContent?.trim()  || null,
-          thumbnail: imgEl?.src || imgEl?.dataset?.src || null,
-        };
-      }).filter(r => r !== null);
+      listings.push(normalise({
+        url,
+        address: linkEl.text().trim() || null,
+        price: parsePrice(c.find('h6').text().trim()),
+        bedrooms: parseBeds(bedsText),
+        prop_type: inferPropertyType(bedsText, linkEl.text(), rawHref),
+        thumbnail: imgEl.attr('src') || imgEl.attr('data-src') || null,
+      }, SOURCE));
     });
-
-    raw.forEach(r => listings.push(normalise({
-      ...r,
-      price:    parsePrice(r.price),
-      bedrooms: parseBeds(r.bedrooms || ''),
-      prop_type: inferPropertyType(r.bedrooms, r.address, r.url),
-    }, SOURCE)));
   } catch (err) {
     console.error(`[${SOURCE}] Error:`, err.message);
-  } finally {
-    await page.context().close();
   }
   return listings;
 }
