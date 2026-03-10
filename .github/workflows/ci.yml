@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        node: [24]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,11 +41,10 @@ jobs:
         run: npm run ci:syntax
 
   unit-tests:
-    name: Unit Tests (Node 22)
+    name: Unit Tests (Node 24)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate-scripts
-    # Application code imports node:sqlite, which is only available on Node 22+.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,7 +52,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -64,11 +63,10 @@ jobs:
         run: npm test
 
   smoke-test:
-    name: Smoke Test (Node 22)
+    name: Smoke Test (Node 24)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate-scripts
-    # Application code imports node:sqlite, which is only available on Node 22+.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +74,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
 
