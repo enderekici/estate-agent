@@ -9,7 +9,7 @@ ENV NODE_ENV=production \
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-FROM mcr.microsoft.com/playwright:v1.44.0-jammy AS runtime
+FROM mcr.microsoft.com/playwright:v1.58.2-noble AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production \
