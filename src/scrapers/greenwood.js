@@ -8,35 +8,53 @@ const BASE = 'https://www.greenwood-property.co.uk';
 
 async function scrape() {
   const listings = [];
-  try {
-    const $ = await loadPage(BASE_URL);
+  const seen = new Set();
+  let pageNum = 1;
+  let hasMore = true;
 
-    $('article.property, .property-item, li.property').each((_, el) => {
-      const c = $(el);
-      const linkEl = c.find('a[href*="/property/"]').first();
-      const fallback = linkEl.length ? linkEl : c.find('a').first();
-      const rawHref = fallback.attr('href') || '';
-      const url = resolveUrl(BASE, rawHref);
-      if (!url || !url.includes('/property/')) return;
+  while (hasMore && pageNum <= 10) {
+    try {
+      const pageUrl = pageNum === 1 ? BASE_URL : `${BASE_URL}&page=${pageNum}`;
+      const $ = await loadPage(pageUrl);
+      let countOnPage = 0;
 
-      const address = c.find('h2, h3').first().text().trim()
-        || c.find('[class*="address"]').first().text().trim()
-        || c.find('[class*="title"]').first().text().trim()
-        || null;
+      $('article.property, .property-item, li.property').each((_, el) => {
+        const c = $(el);
+        const linkEl = c.find('a[href*="/property/"]').first();
+        const fallback = linkEl.length ? linkEl : c.find('a').first();
+        const rawHref = fallback.attr('href') || '';
+        const url = resolveUrl(BASE, rawHref);
+        if (!url || !url.includes('/property/')) return;
+        if (seen.has(url)) return;
+        seen.add(url);
+        countOnPage++;
 
-      listings.push(normalise({
-        url,
-        address,
-        price: parsePrice(c.find('[class*="price"]').first().text().trim()),
-        bedrooms: parseBeds(
-          (c.find('[class*="bed"]').first().text().trim() || '') + ' ' + (address || '')
-        ),
-        prop_type: c.find('[class*="type"]').first().text().trim() || null,
-        thumbnail: c.find('img').attr('src') || null,
-      }, SOURCE));
-    });
-  } catch (err) {
-    console.error(`[${SOURCE}] Error:`, err.message);
+        const address = c.find('h2, h3').first().text().trim()
+          || c.find('[class*="address"]').first().text().trim()
+          || c.find('[class*="title"]').first().text().trim()
+          || null;
+
+        listings.push(normalise({
+          url,
+          address,
+          price: parsePrice(c.find('[class*="price"]').first().text().trim()),
+          bedrooms: parseBeds(
+            (c.find('[class*="bed"]').first().text().trim() || '') + ' ' + (address || '')
+          ),
+          prop_type: c.find('[class*="type"]').first().text().trim() || null,
+          thumbnail: c.find('img').attr('src') || null,
+        }, SOURCE));
+      });
+
+      if (countOnPage === 0) hasMore = false;
+    } catch (err) {
+      console.error(`[${SOURCE}] Error (page ${pageNum}):`, err.message);
+      hasMore = false;
+    }
+    if (hasMore) {
+      await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+    }
+    pageNum++;
   }
   return listings;
 }

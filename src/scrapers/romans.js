@@ -65,7 +65,7 @@ async function scrape() {
     let pageNum = 1;
     let hasMore = true;
 
-    while (hasMore) {
+    while (hasMore && pageNum <= 10) {
       await page.waitForTimeout(1000);
 
       const raw = await page.evaluate(() => {

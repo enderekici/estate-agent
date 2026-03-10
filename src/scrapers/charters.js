@@ -4,6 +4,7 @@ const { buildChartersUrl } = require('./search-url-builders');
 
 const SOURCE = 'charters';
 const URL = buildChartersUrl();
+const MAX_PAGES = 10;
 
 // Each property has TWO a[href*="/property-for-sale/"] elements with the same href:
 //   1) image link: has <img>, empty text
@@ -42,49 +43,76 @@ function parseChartersEntry({ href, text, imgSrc, imgAlt }) {
 async function scrape() {
   const page = await newPage();
   const listings = [];
+  const seenUrls = new Set();
   try {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
     try {
       await page.waitForSelector('a[href*="/property-for-sale/"]', { timeout: 15000 });
     } catch (_) {}
 
-    const raw = await page.evaluate(() => {
-      // Merge image link + text link by href
-      const map = {};
-      Array.from(document.querySelectorAll('a[href*="/property-for-sale/"]')).forEach(a => {
-        const href = a.href;
-        if (!href || !href.includes('chartersestateagents')) return;
-        if (!map[href]) map[href] = { href, imgSrc: null, imgAlt: '', text: '' };
-        const img = a.querySelector('img');
-        if (!map[href].imgSrc) {
-          const source = a.querySelector('picture source[srcset]');
-          if (source) {
-            const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
-            if (first && !first.includes('.svg')) map[href].imgSrc = first;
+    let pageNum = 1;
+    while (pageNum <= MAX_PAGES) {
+      const pageData = await page.evaluate(() => {
+        // Merge image link + text link by href
+        const map = {};
+        Array.from(document.querySelectorAll('a[href*="/property-for-sale/"]')).forEach(a => {
+          const href = a.href;
+          if (!href || !href.includes('chartersestateagents')) return;
+          if (!map[href]) map[href] = { href, imgSrc: null, imgAlt: '', text: '' };
+          const img = a.querySelector('img');
+          if (!map[href].imgSrc) {
+            const source = a.querySelector('picture source[srcset]');
+            if (source) {
+              const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) map[href].imgSrc = first;
+            }
+            if (!map[href].imgSrc && img) {
+              map[href].imgSrc = img.currentSrc || img.src || img.getAttribute('data-src') || null;
+            }
+            if (img) map[href].imgAlt = img.alt || '';
           }
-          if (!map[href].imgSrc && img) {
-            map[href].imgSrc = img.currentSrc || img.src || img.getAttribute('data-src') || null;
-          }
-          if (img) map[href].imgAlt = img.alt || '';
-        }
-        const text = a.textContent.trim();
-        if (text.length > map[href].text.length) map[href].text = text;
-      });
-      return Object.values(map);
-    });
+          const text = a.textContent.trim();
+          if (text.length > map[href].text.length) map[href].text = text;
+        });
 
-    raw.forEach(entry => {
-      if (!entry.text && !entry.imgSrc) return; // skip nav links
-      const parsed = parseChartersEntry(entry);
-      listings.push(normalise({
-        url:       entry.href,
-        price:     parsed.price,
-        address:   parsed.address,
-        bedrooms:  parsed.bedrooms,
-        prop_type: parsed.prop_type,
-        thumbnail: parsed.thumbnail,
-      }, SOURCE));
-    });
+        const nextEl = document.querySelector('a[rel="next"], .pagination a, a[href*="page/"]');
+        const nextHref = nextEl?.href || null;
+
+        return { results: Object.values(map), nextHref };
+      });
+
+      let newOnPage = 0;
+      for (const entry of pageData.results) {
+        if (!entry.text && !entry.imgSrc) continue; // skip nav links
+        if (seenUrls.has(entry.href)) continue;
+        seenUrls.add(entry.href);
+        const parsed = parseChartersEntry(entry);
+        listings.push(normalise({
+          url:       entry.href,
+          price:     parsed.price,
+          address:   parsed.address,
+          bedrooms:  parsed.bedrooms,
+          prop_type: parsed.prop_type,
+          thumbnail: parsed.thumbnail,
+        }, SOURCE));
+        newOnPage++;
+      }
+
+      if (newOnPage === 0 || !pageData.nextHref) break;
+
+      // Navigate to next page
+      try {
+        pageNum++;
+        await randomDelay();
+        await page.goto(pageData.nextHref, { waitUntil: 'domcontentloaded', timeout: 35000 });
+        try {
+          await page.waitForSelector('a[href*="/property-for-sale/"]', { timeout: 15000 });
+        } catch (_) {}
+      } catch (navErr) {
+        console.warn(`[${SOURCE}] Pagination error on page ${pageNum}:`, navErr.message);
+        break;
+      }
+    }
   } catch (err) {
     console.error(`[${SOURCE}] Error:`, err.message);
   } finally {

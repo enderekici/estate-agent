@@ -14,37 +14,52 @@ const BASE = 'https://www.truemanandgrundy.co.uk';
 
 async function scrape() {
   const listings = [];
-  try {
-    const $ = await loadPage(URL);
+  const seen = new Set();
+  let pageNum = 1;
+  let hasMore = true;
 
-    $('article.wppf_property_item').each((_, el) => {
-      const c = $(el);
-      const linkEl = c.find('h4 a[href*="/property/"]');
-      const rawHref = linkEl.attr('href') || '';
-      if (!rawHref) return;
-      const url = resolveUrl(BASE, rawHref);
+  while (hasMore && pageNum <= 10) {
+    try {
+      const pageUrl = pageNum === 1 ? URL : `${URL}&paged=${pageNum}`;
+      const $ = await loadPage(pageUrl);
+      let countOnPage = 0;
 
-      const bedsText = c.find('h5').text().trim();
-      const imgEl = c.find('figure img');
+      $('article.wppf_property_item').each((_, el) => {
+        const c = $(el);
+        const linkEl = c.find('h4 a[href*="/property/"]');
+        const rawHref = linkEl.attr('href') || '';
+        if (!rawHref) return;
+        const url = resolveUrl(BASE, rawHref);
+        if (seen.has(url)) return;
+        seen.add(url);
+        countOnPage++;
 
-      listings.push(normalise({
-        url,
-        address: linkEl.text().trim() || null,
-        price: parsePrice(c.find('h6').text().trim()),
-        bedrooms: parseBeds(bedsText),
-        prop_type: inferPropertyType(bedsText, linkEl.text(), rawHref),
-        thumbnail: (() => {
-          const sourceEl = c.find('picture source[srcset]');
-          if (sourceEl.length) {
-            const first = (sourceEl.attr('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
-            if (first && !first.includes('.svg')) return first;
-          }
-          return imgEl.attr('src') || imgEl.attr('data-src') || null;
-        })(),
-      }, SOURCE));
-    });
-  } catch (err) {
-    console.error(`[${SOURCE}] Error:`, err.message);
+        const bedsText = c.find('h5').text().trim();
+        const imgEl = c.find('figure img');
+
+        listings.push(normalise({
+          url,
+          address: linkEl.text().trim() || null,
+          price: parsePrice(c.find('h6').text().trim()),
+          bedrooms: parseBeds(bedsText),
+          prop_type: inferPropertyType(bedsText, linkEl.text(), rawHref),
+          thumbnail: (() => {
+            const sourceEl = c.find('picture source[srcset]');
+            if (sourceEl.length) {
+              const first = (sourceEl.attr('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            return imgEl.attr('src') || imgEl.attr('data-src') || null;
+          })(),
+        }, SOURCE));
+      });
+
+      if (countOnPage === 0) hasMore = false;
+    } catch (err) {
+      console.error(`[${SOURCE}] Error (page ${pageNum}):`, err.message);
+      hasMore = false;
+    }
+    pageNum++;
   }
   return listings;
 }

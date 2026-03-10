@@ -14,6 +14,7 @@ const scrapers = [
   require('./truemangrundy'),
   require('./wpr'),
   require('./winkworth'),
+  require('./greenwood'),
 ];
 
 const { closeBrowser } = require('./browser');

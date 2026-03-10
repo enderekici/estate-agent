@@ -8,6 +8,7 @@ const BASE_URL = buildCurchodsUrl();
 async function scrape() {
   const page = await newPage();
   const listings = [];
+  const seenUrls = new Set();
   try {
     let pageNum = 1;
     let hasMore = true;
@@ -66,15 +67,22 @@ async function scrape() {
 
       if (!raw.length) { hasMore = false; break; }
 
-      raw.forEach(r => listings.push(normalise({
-        ...r,
-        price:    parsePrice(r.price),
-        bedrooms: parseBeds(r.bedrooms || ''),
-        prop_type: inferPropertyType(r.bedrooms, r.address),
-      }, SOURCE)));
+      raw.forEach(r => {
+        const listing = normalise({
+          ...r,
+          price:    parsePrice(r.price),
+          bedrooms: parseBeds(r.bedrooms || ''),
+          prop_type: inferPropertyType(r.bedrooms, r.address),
+        }, SOURCE);
+        if (listing.id && !seenUrls.has(listing.id)) {
+          seenUrls.add(listing.id);
+          listings.push(listing);
+        }
+      });
 
       // Check for next page link
-      const hasNext = await page.$('a[href*="/paged/"]:has-text("Next"), [class*="next"] a, a[rel="next"]').catch(() => null);
+      const nextPageUrl = `/paged/${pageNum + 1}/`;
+      const hasNext = await page.$(`a[href*="${nextPageUrl}"], a[href*="/paged/"]:not([href*="/paged/${pageNum}/"]), [class*="next"] a, a[rel="next"], a[href*="/paged/"][class*="next"], .pagination a:last-child`).catch(() => null);
       if (hasNext && raw.length > 0) { pageNum++; await randomDelay(); }
       else hasMore = false;
     }

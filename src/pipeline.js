@@ -24,6 +24,7 @@ const VALID_URL_PATTERNS = {
   bourne:        /bourneestateagents\.com\/property\//i,
   charters:      /chartersestateagents\.co\.uk\/property-for-sale\//i,
   curchods:      /curchods\.com\/display\//i,
+  greenwood:     /greenwood-property\.co\.uk\/propert(y|ies)\//i,
   wpr:           /wpr\.co\.uk\/properties\/sale\//i,
 };
 
