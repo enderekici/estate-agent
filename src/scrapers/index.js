@@ -18,26 +18,33 @@ const scrapers = [
 
 const { closeBrowser } = require('./browser');
 
+const CONCURRENCY = parseInt(process.env.SCRAPE_CONCURRENCY || '4', 10);
+
 /**
- * Run all scrapers sequentially and return combined results.
+ * Run all scrapers in parallel (bounded concurrency) and return combined results.
  */
 async function runAll(options = {}) {
   const { only } = options; // optional array of source names to restrict
+  const active = scrapers.filter(s => !only || only.includes(s.SOURCE));
   const results = {};
 
-  for (const scraper of scrapers) {
-    if (only && !only.includes(scraper.SOURCE)) continue;
-
-    console.log(`  Scraping ${scraper.SOURCE}...`);
-    const start = Date.now();
-    try {
-      const listings = await scraper.scrape();
-      results[scraper.SOURCE] = listings;
-      console.log(`  ✓ ${scraper.SOURCE}: ${listings.length} listings (${Date.now() - start}ms)`);
-    } catch (err) {
-      console.error(`  ✗ ${scraper.SOURCE}: ${err.message}`);
-      results[scraper.SOURCE] = [];
-    }
+  // Process scrapers in batches of CONCURRENCY
+  for (let i = 0; i < active.length; i += CONCURRENCY) {
+    const batch = active.slice(i, i + CONCURRENCY);
+    const settled = await Promise.allSettled(
+      batch.map(async (scraper) => {
+        console.log(`  Scraping ${scraper.SOURCE}...`);
+        const start = Date.now();
+        try {
+          const listings = await scraper.scrape();
+          results[scraper.SOURCE] = listings;
+          console.log(`  ✓ ${scraper.SOURCE}: ${listings.length} listings (${Date.now() - start}ms)`);
+        } catch (err) {
+          console.error(`  ✗ ${scraper.SOURCE}: ${err.message}`);
+          results[scraper.SOURCE] = [];
+        }
+      })
+    );
   }
 
   await closeBrowser();
