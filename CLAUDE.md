@@ -47,11 +47,11 @@ ssh -i "$SSH_KEY" "$SERVER" "cd $DEPLOY_DIR && export IMAGE_TAG=main && docker c
 
 ## Debugging Scrapers
 
-**Checking live API** (use `/usr/bin/curl` to bypass rtk hook that redacts values):
+**Checking live API**:
 ```bash
-/usr/bin/curl -s 'http://localhost:3000/api/stats'
-/usr/bin/curl -s 'http://localhost:3000/api/listings?source=rightmove'
-/usr/bin/curl -s 'http://localhost:3000/api/scrape/status'
+curl -s 'http://localhost:3000/api/stats'
+curl -s 'http://localhost:3000/api/listings?source=rightmove'
+curl -s 'http://localhost:3000/api/scrape/status'
 ```
 
 **Running scripts inside the container**: Write a `.js` file locally, `scp` to VPS, then `docker cp` into the container and exec. Direct `node -e` via SSH mangles `$` and `!` characters.
