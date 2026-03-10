@@ -13,32 +13,39 @@ const MAX_STALE_PAGES = 2;
 //   (look for OUTCODE^NNNN in the page source)
 const OUTCODE_IDS = { GU9: '1042', GU10: '1043' };
 
-function getLocationId() {
+function getLocationIds() {
   const search = getSearchParams();
-  const district = search.postcodeDistrict || 'GU9';
-  const id = OUTCODE_IDS[district];
-  if (!id) {
-    console.warn(`[rightmove] No known outcode ID for ${district}, using GU9 fallback`);
-    return `OUTCODE^${OUTCODE_IDS.GU9}`;
+  const districts = search.postcodeDistricts?.length ? search.postcodeDistricts : [search.postcodeDistrict || 'GU9'];
+  const ids = [];
+  for (const district of districts) {
+    const id = OUTCODE_IDS[district];
+    if (id) {
+      ids.push(`OUTCODE^${id}`);
+    } else {
+      console.warn(`[rightmove] No known outcode ID for ${district}, skipping`);
+    }
   }
-  return `OUTCODE^${id}`;
+  if (!ids.length) ids.push(`OUTCODE^${OUTCODE_IDS.GU9}`);
+  return ids;
 }
 
 async function scrape() {
   const search = getSearchParams();
-  const locationId = await getLocationId();
-  const encodedId  = encodeURIComponent(locationId);
+  const locationIds = getLocationIds();
   const page = await newPage();
   const listings = [];
   const seenIds = new Set();
 
   try {
+    for (const locationId of locationIds) {
+    const encodedId = encodeURIComponent(locationId);
     let pageNum = 0;
     let stalePages = 0;
 
     while (pageNum < MAX_PAGES && stalePages < MAX_STALE_PAGES) {
       const pageIndex = pageNum * PAGE_SIZE;
-      const url = `https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=${encodedId}&minBedrooms=${search.minBedrooms || 0}&sortType=6&index=${pageIndex}`;
+      const maxPriceParam = search.maxPrice ? `&maxPrice=${search.maxPrice}` : '';
+      const url = `https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=${encodedId}&minBedrooms=${search.minBedrooms || 0}${maxPriceParam}&sortType=6&index=${pageIndex}`;
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(2000);
 
@@ -192,6 +199,7 @@ async function scrape() {
       pageNum++;
       await randomDelay();
     }
+    } // end for locationIds
   } catch (err) {
     console.error(`[${SOURCE}] Error:`, err.message);
   } finally {
