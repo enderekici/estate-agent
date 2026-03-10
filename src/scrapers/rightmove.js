@@ -1,5 +1,4 @@
 const { newPage, randomDelay } = require('./browser');
-const axios = require('axios');
 const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_localBase');
 const { getSearchParams } = require('./search-params');
 
@@ -8,29 +7,21 @@ const PAGE_SIZE = 24;
 const MAX_PAGES = 12;
 const MAX_STALE_PAGES = 2;
 
-async function getLocationId() {
+// Rightmove outcode IDs for the configured postcode districts.
+// These can shift when Rightmove renumbers — verify at:
+//   https://www.rightmove.co.uk/property-for-sale/GU9.html
+//   (look for OUTCODE^NNNN in the page source)
+const OUTCODE_IDS = { GU9: '1042', GU10: '1043' };
+
+function getLocationId() {
   const search = getSearchParams();
-  try {
-    const res = await axios.get('https://api.rightmove.co.uk/api/typeAhead/uknoauth', {
-      params: { query: search.locationQuery, limit: 10 },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Referer: 'https://www.rightmove.co.uk/',
-      },
-      timeout: 8000,
-    });
-    const locations = res.data?.typeAheadLocations || [];
-    const match = locations.find(l =>
-      l.displayName?.toLowerCase().includes(search.location.toLowerCase()) &&
-      (!search.county || l.displayName?.toLowerCase().includes(search.county.toLowerCase())) &&
-      !l.locationIdentifier?.includes('STATION')
-    ) || locations.find(l => l.displayName?.toLowerCase().includes(search.location.toLowerCase()));
-    console.log(`[rightmove] Location: ${match?.displayName} → ${match?.locationIdentifier}`);
-    return match?.locationIdentifier || 'OUTCODE^2576';
-  } catch (err) {
-    console.warn(`[rightmove] Could not resolve location ID for ${search.locationQuery}, using fallback OUTCODE^2576`);
-    return 'OUTCODE^2576';
+  const district = search.postcodeDistrict || 'GU9';
+  const id = OUTCODE_IDS[district];
+  if (!id) {
+    console.warn(`[rightmove] No known outcode ID for ${district}, using GU9 fallback`);
+    return `OUTCODE^${OUTCODE_IDS.GU9}`;
   }
+  return `OUTCODE^${id}`;
 }
 
 async function scrape() {
