@@ -17,7 +17,8 @@ This app can be deployed to a VPS using Docker in the same style as the `trader2
    - `SERVER`
    - `SSH_KEY`
    - `DEPLOY_DIR`
-   - optionally `GHCR_USERNAME` / `GHCR_TOKEN`
+   - optionally `GHCR_TOKEN`
+   - optionally `IMAGE_TAG` (defaults to `main`)
 3. Ensure the VPS has an `.env` file with the app secrets and overrides you want
 4. Run:
 
@@ -33,6 +34,7 @@ chmod +x deploy.sh manage-vps.sh
 ./manage-vps.sh logs
 ./manage-vps.sh restart
 ./manage-vps.sh backup
+./manage-vps.sh restore backups/estate-agent_YYYYMMDD_HHMMSS.db
 ```
 
 ## Notes
@@ -40,4 +42,5 @@ chmod +x deploy.sh manage-vps.sh
 - Production data lives in `./data` on the VPS and is mounted into `/app/data`
 - The container exposes port `3000`
 - Health checks use `GET /api/config`
-- This deployment flow assumes a container image is available at `ghcr.io/enderekici/estate-agent:main`
+- This deployment flow assumes a multi-arch image is available at `ghcr.io/enderekici/estate-agent:<tag>`
+- The current Docker base images support `linux/amd64` and `linux/arm64`, so an ARM64 Linux VPS can pull the same GHCR tag without a separate Dockerfile

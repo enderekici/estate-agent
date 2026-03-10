@@ -11,6 +11,7 @@ else
   echo "  SSH_KEY=\$HOME/path/to/your/ssh-key.pem"
   echo "  DEPLOY_DIR=/home/ubuntu/estate-agent"
   echo "  GHCR_TOKEN=your_github_token (optional, for private repos)"
+  echo "  IMAGE_TAG=main"
   exit 1
 fi
 
@@ -37,6 +38,7 @@ fi
 ssh -i "$SSH_KEY" "$SERVER" <<ENDSSH
 set -e
 cd "$DEPLOY_DIR"
+export IMAGE_TAG="${IMAGE_TAG:-main}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Installing Docker..."
@@ -66,7 +68,12 @@ echo "Starting service..."
 docker compose -f docker-compose.prod.yml up -d
 
 echo "Waiting for service to become healthy..."
-sleep 15
+for i in \$(seq 1 30); do
+  if docker compose -f docker-compose.prod.yml ps --format json | grep -q 'healthy'; then
+    break
+  fi
+  sleep 2
+done
 
 docker compose -f docker-compose.prod.yml ps
 ENDSSH

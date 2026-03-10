@@ -29,6 +29,8 @@ show_help() {
   echo "  start     - Start service"
   echo "  ssh       - SSH into the server"
   echo "  update    - Run deploy.sh"
+  echo "  backup    - Download the current SQLite DB"
+  echo "  restore   - Restore SQLite DB from a local backup file"
 }
 
 run_logs() {
@@ -61,6 +63,24 @@ run_update() {
   ./deploy.sh
 }
 
+run_backup() {
+  mkdir -p backups
+  local timestamp
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  local backup_file="backups/estate-agent_${timestamp}.db"
+  scp -i "$SSH_KEY" "$SERVER:$DEPLOY_DIR/data/listings.db" "$backup_file"
+  echo -e "${GREEN}Backup saved to $backup_file${NC}"
+}
+
+run_restore() {
+  if [ -z "${1:-}" ]; then
+    echo -e "${RED}Please provide a backup file path${NC}"
+    exit 1
+  fi
+  scp -i "$SSH_KEY" "$1" "$SERVER:$DEPLOY_DIR/data/listings.db"
+  run_restart
+}
+
 case "${1:-help}" in
   logs) run_logs ;;
   status) run_status ;;
@@ -69,5 +89,7 @@ case "${1:-help}" in
   start) run_start ;;
   ssh) run_ssh ;;
   update) run_update ;;
+  backup) run_backup ;;
+  restore) run_restore "${2:-}" ;;
   *) show_help ;;
 esac

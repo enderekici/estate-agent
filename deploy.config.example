@@ -6,3 +6,4 @@ SERVER=ubuntu@your-vps-ip-address
 SSH_KEY=$HOME/path/to/your/ssh-key.pem
 DEPLOY_DIR=/home/ubuntu/estate-agent
 GHCR_TOKEN=
+IMAGE_TAG=main

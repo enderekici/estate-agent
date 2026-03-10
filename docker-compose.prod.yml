@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/enderekici/estate-agent:main
+    image: ghcr.io/enderekici/estate-agent:${IMAGE_TAG:-main}
     env_file: .env
     volumes:
       - ./data:/app/data
