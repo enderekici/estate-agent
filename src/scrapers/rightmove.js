@@ -7,26 +7,15 @@ const PAGE_SIZE = 24;
 const MAX_PAGES = 12;
 const MAX_STALE_PAGES = 2;
 
-// Rightmove outcode IDs for the configured postcode districts.
-// These can shift when Rightmove renumbers — verify at:
-//   https://www.rightmove.co.uk/property-for-sale/GU9.html
-//   (look for OUTCODE^NNNN in the page source)
-const OUTCODE_IDS = { GU9: '1042', GU10: '1043' };
+// Rightmove location IDs — REGION covers the whole town (521 results),
+// OUTCODE only covers one postcode area (88 results for GU9).
+// Use REGION^506 (Farnham) as primary search to capture all Farnham listings.
+// Verify at: https://www.rightmove.co.uk/property-for-sale/Farnham.html
+//   (look for REGION^NNN or OUTCODE^NNNN in the page source)
+const REGION_ID = 'REGION^506'; // Farnham
 
 function getLocationIds() {
-  const search = getSearchParams();
-  const districts = search.postcodeDistricts?.length ? search.postcodeDistricts : [search.postcodeDistrict || 'GU9'];
-  const ids = [];
-  for (const district of districts) {
-    const id = OUTCODE_IDS[district];
-    if (id) {
-      ids.push(`OUTCODE^${id}`);
-    } else {
-      console.warn(`[rightmove] No known outcode ID for ${district}, skipping`);
-    }
-  }
-  if (!ids.length) ids.push(`OUTCODE^${OUTCODE_IDS.GU9}`);
-  return ids;
+  return [REGION_ID];
 }
 
 async function scrape() {
@@ -45,7 +34,7 @@ async function scrape() {
     while (pageNum < MAX_PAGES && stalePages < MAX_STALE_PAGES) {
       const pageIndex = pageNum * PAGE_SIZE;
       const maxPriceParam = search.maxPrice ? `&maxPrice=${search.maxPrice}` : '';
-      const url = `https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=${encodedId}&minBedrooms=${search.minBedrooms || 0}${maxPriceParam}&radius=1.0&sortType=6&index=${pageIndex}`;
+      const url = `https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=${encodedId}&minBedrooms=${search.minBedrooms || 0}${maxPriceParam}&sortType=6&index=${pageIndex}`;
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(2000);
 
