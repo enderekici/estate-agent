@@ -28,9 +28,9 @@ bash deploy.sh                    # Full deploy: copies compose + .env, pulls im
 source deploy.config              # Load VPS connection vars (SERVER, SSH_KEY, DEPLOY_DIR)
 ```
 
-**VPS**: Oracle Cloud arm64 at 144.24.180.184 (Tailscale: 100.89.170.65), deployed via `docker-compose.prod.yml`.
+**VPS**: Oracle Cloud arm64 at &lt;VPS_IP&gt; (Tailscale: localhost), deployed via `docker-compose.prod.yml`.
 
-**Tailscale exit node**: App traffic routes through a Tailscale sidecar container using Pi5 (100.110.80.103) as exit node. This gives scrapers a residential IP instead of datacenter IP, which is critical — estate agent sites block/degrade datacenter IPs (missing images, empty results, captchas).
+**Tailscale exit node**: App traffic routes through a Tailscale sidecar container using Pi5 (&lt;EXIT_NODE_IP&gt;) as exit node. This gives scrapers a residential IP instead of datacenter IP, which is critical — estate agent sites block/degrade datacenter IPs (missing images, empty results, captchas).
 
 **Image**: Built by CI and pushed to `ghcr.io/enderekici/estate-agent:main`. Multi-arch (amd64 + arm64).
 
@@ -49,9 +49,9 @@ ssh -i "$SSH_KEY" "$SERVER" "cd $DEPLOY_DIR && export IMAGE_TAG=main && docker c
 
 **Checking live API** (use `/usr/bin/curl` to bypass rtk hook that redacts values):
 ```bash
-/usr/bin/curl -s 'http://100.89.170.65:3000/api/stats'
-/usr/bin/curl -s 'http://100.89.170.65:3000/api/listings?source=rightmove'
-/usr/bin/curl -s 'http://100.89.170.65:3000/api/scrape/status'
+/usr/bin/curl -s 'http://localhost:3000/api/stats'
+/usr/bin/curl -s 'http://localhost:3000/api/listings?source=rightmove'
+/usr/bin/curl -s 'http://localhost:3000/api/scrape/status'
 ```
 
 **Running scripts inside the container**: Write a `.js` file locally, `scp` to VPS, then `docker cp` into the container and exec. Direct `node -e` via SSH mangles `$` and `!` characters.
