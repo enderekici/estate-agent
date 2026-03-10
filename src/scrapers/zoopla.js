@@ -102,7 +102,23 @@ async function scrape() {
             .filter(Boolean)
             .slice(0, 10)
             .join(' ');
-          const img = row.querySelector('img');
+          // Try multiple strategies for thumbnail extraction (lazy-loaded images)
+          const thumb = (() => {
+            // 1. <picture><source srcset="...">
+            const source = row.querySelector('picture source[srcset]');
+            if (source) {
+              const srcset = source.getAttribute('srcset') || '';
+              const first = srcset.split(',')[0].trim().split(/\s+/)[0];
+              if (first && !first.includes('.svg')) return first;
+            }
+            // 2. <img> with various src attributes
+            const imgs = Array.from(row.querySelectorAll('img'));
+            for (const img of imgs) {
+              const src = img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('srcset')?.split(',')[0]?.trim().split(/\s+/)[0] || '';
+              if (src && !src.includes('.svg') && !src.includes('logo') && !src.includes('placeholder')) return src;
+            }
+            return null;
+          })();
 
           return {
             url,
@@ -111,7 +127,7 @@ async function scrape() {
             titleText: text(titleEl),
             bedroomsText: text(bedsEl),
             amenitiesText: amenities,
-            thumbnail: img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null,
+            thumbnail: thumb,
           };
         }).filter(Boolean);
 

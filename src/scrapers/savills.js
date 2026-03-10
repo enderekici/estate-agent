@@ -50,14 +50,23 @@ async function scrape() {
 
         // Beds from [class*="bed"]
         const bedsEl = card.querySelector('[class*="bed"], [class*="Bed"]');
-        const img = card.querySelector('img');
+        // Try picture > source srcset first, then img with various src attrs
+        const thumb = (() => {
+          const source = card.querySelector('picture source[srcset]');
+          if (source) {
+            const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+            if (first && !first.includes('.svg')) return first;
+          }
+          const img = card.querySelector('img');
+          return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+        })();
 
         return {
           url:       href,
           address:   address || null,
           price:     priceEl?.textContent?.trim() || null,
           bedrooms:  bedsEl?.textContent?.trim() || null,
-          thumbnail: img?.src || null,
+          thumbnail: thumb,
         };
       }).filter(Boolean);
     });

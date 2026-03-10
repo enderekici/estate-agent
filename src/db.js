@@ -115,7 +115,9 @@ function deduplicateListings() {
   // Find listings with same price and bedrooms, check if address is similar enough
   const candidates = db.prepare(`
     SELECT a.id as aid, a.address as aaddr, a.source as asrc, a.first_seen as afirst,
-           b.id as bid, b.address as baddr, b.source as bsrc, b.first_seen as bfirst
+           a.prop_type as atype, a.thumbnail as athumb,
+           b.id as bid, b.address as baddr, b.source as bsrc, b.first_seen as bfirst,
+           b.prop_type as btype, b.thumbnail as bthumb
     FROM listings a JOIN listings b
       ON a.price = b.price
       AND a.bedrooms = b.bedrooms
@@ -131,6 +133,19 @@ function deduplicateListings() {
 
   let merged = 0;
   const stmtDup = db.prepare('UPDATE listings SET duplicate_of=? WHERE id=?');
+  const stmtBackfill = db.prepare(`
+    UPDATE listings SET
+      prop_type = CASE WHEN prop_type IS NULL AND ?1 IS NOT NULL THEN ?1 ELSE prop_type END,
+      thumbnail = CASE WHEN thumbnail IS NULL AND ?2 IS NOT NULL THEN ?2 ELSE thumbnail END
+    WHERE id=?3
+  `);
+
+  function markDuplicate(row) {
+    stmtDup.run(row.aid, row.bid);
+    // Backfill missing fields on the canonical listing from the duplicate
+    stmtBackfill.run(row.btype, row.bthumb, row.aid);
+    merged++;
+  }
 
   for (const row of candidates) {
     if (!row.aaddr || !row.baddr) continue;
@@ -139,8 +154,7 @@ function deduplicateListings() {
     if (!a || !b) continue;
 
     if (a === b) {
-      stmtDup.run(row.aid, row.bid);
-      merged++;
+      markDuplicate(row);
       continue;
     }
 
@@ -149,9 +163,7 @@ function deduplicateListings() {
     const wordsB = new Set(b.split(' ').filter(w => w.length > 3));
     const common = [...wordsA].filter(w => wordsB.has(w));
     if (row.asrc !== row.bsrc && common.length >= 2) {
-      // Mark the later one (bid) as duplicate of the earlier (aid)
-      stmtDup.run(row.aid, row.bid);
-      merged++;
+      markDuplicate(row);
     }
   }
   return merged;
