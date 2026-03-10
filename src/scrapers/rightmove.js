@@ -45,7 +45,7 @@ async function scrape() {
     while (pageNum < MAX_PAGES && stalePages < MAX_STALE_PAGES) {
       const pageIndex = pageNum * PAGE_SIZE;
       const maxPriceParam = search.maxPrice ? `&maxPrice=${search.maxPrice}` : '';
-      const url = `https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=${encodedId}&minBedrooms=${search.minBedrooms || 0}${maxPriceParam}&sortType=6&index=${pageIndex}`;
+      const url = `https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=${encodedId}&minBedrooms=${search.minBedrooms || 0}${maxPriceParam}&radius=1.0&sortType=6&index=${pageIndex}`;
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(2000);
 
