@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farnham Home Finder</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d2e; --card: #1e2135;
+      --border: #2a2d4a; --accent: #4f8ef7; --green: #3ecf8e;
+      --red: #f76b6b; --gold: #f7c94f; --text: #e2e8f0; --muted: #8892a4;
+      --radius: 10px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+    /* Header */
+    header { background: var(--surface); border-bottom: 1px solid var(--border);
+             padding: 1rem 1.5rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+    header h1 { font-size: 1.2rem; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+    .stat-pill { background: var(--card); border: 1px solid var(--border);
+                 border-radius: 20px; padding: .25rem .75rem; font-size: .8rem; color: var(--muted); }
+    .stat-pill b { color: var(--text); }
+    #scrapeBtn { margin-left: auto; background: var(--accent); color: #fff; border: none;
+                 border-radius: 8px; padding: .5rem 1rem; cursor: pointer; font-size: .85rem; }
+    #scrapeBtn:hover { opacity: .85; }
+    #scrapeBtn.running { background: var(--muted); cursor: not-allowed; }
+    .feedback { border-bottom: 1px solid var(--border); padding: .55rem 1rem; font-size: .82rem; color: var(--text); background: var(--surface); }
+    .feedback.info { border-left: 3px solid var(--accent); }
+    .feedback.success { border-left: 3px solid var(--green); }
+    .feedback.error { border-left: 3px solid var(--red); color: #ffd4d4; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: calc(100vh - 57px); min-width: 0; }
+
+    /* Sidebar filters */
+    aside { background: var(--surface); border-right: 1px solid var(--border);
+            padding: 1rem; overflow-y: auto; }
+    aside h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em;
+                color: var(--muted); margin-bottom: .75rem; }
+    .filter-group { margin-bottom: 1.25rem; }
+    .filter-group label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .3rem; }
+    .filter-group select, .filter-group input[type=range], .filter-group input[type=number] {
+      width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text);
+      border-radius: 6px; padding: .4rem .6rem; font-size: .85rem; }
+    .filter-group input[type=range] { padding: 0; }
+    .toggle-group { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .toggle-btn { background: var(--card); border: 1px solid var(--border); color: var(--muted);
+                  border-radius: 20px; padding: .25rem .75rem; cursor: pointer; font-size: .8rem; }
+    .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .price-display { font-size: .8rem; color: var(--accent); margin-top: .2rem; }
+    .toggle-label { display: flex; align-items: center; gap: .5rem; cursor: pointer; font-size: .82rem; color: var(--text); }
+    .toggle-label input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+    .beds-type-row { display: flex; gap: .4rem; flex-wrap: wrap; margin: .3rem 0; }
+    .meta-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+                 padding: .12rem .45rem; font-size: .75rem; color: var(--muted); }
+    .poa-pill { color: var(--muted); border-color: var(--border); font-style: italic; }
+
+    /* View switcher */
+    .view-switcher { background: var(--surface); border-bottom: 1px solid var(--border);
+                     padding: .5rem 1rem; display: flex; gap: .5rem; }
+    .view-btn { background: var(--card); border: 1px solid var(--border); color: var(--muted);
+                border-radius: 6px; padding: .3rem .8rem; cursor: pointer; font-size: .8rem; }
+    .view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* Main content */
+    main { overflow-y: auto; min-width: 0; }
+    .content-wrapper { padding: 1rem; }
+
+    /* Listing grid */
+    #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 1rem; min-width: 0; }
+
+    /* Card */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+             overflow: hidden; transition: transform .15s, box-shadow .15s; position: relative; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    .card.seen { opacity: .65; }
+    .card img { width: 100%; height: 180px; object-fit: cover; background: var(--surface); }
+    .card-body { padding: .875rem; }
+    .card-source { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em;
+                   color: var(--muted); margin-bottom: .3rem; }
+    .card-price { font-size: 1.25rem; font-weight: 700; color: var(--green); }
+    .card-price.poa { font-size: .85rem; font-weight: 400; color: var(--muted); font-style: italic; }
+    .card-address { font-size: .85rem; color: var(--text); margin: .3rem 0; }
+    .card-meta { display: flex; gap: .75rem; font-size: .78rem; color: var(--muted); margin: .4rem 0; }
+    .card-dist { display: flex; gap: .5rem; flex-wrap: wrap; margin: .4rem 0; }
+    .dist-tag { background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+                padding: .15rem .5rem; font-size: .72rem; color: var(--muted); }
+    .dist-tag.good { color: var(--green); border-color: var(--green); }
+    .card-actions { display: flex; gap: .5rem; margin-top: .75rem; }
+    .btn-sm { background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+              border-radius: 6px; padding: .3rem .6rem; cursor: pointer; font-size: .75rem; }
+    .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm.fav { color: var(--gold); border-color: var(--gold); }
+    .btn-sm.seen-btn { color: var(--green); border-color: var(--green); }
+    a.view-link, .view-link.disabled-link { background: var(--accent); color: #fff; text-decoration: none;
+                  border-radius: 6px; padding: .3rem .75rem; font-size: .75rem; margin-left: auto; }
+    .view-link.disabled-link { background: var(--surface); color: var(--muted); border: 1px solid var(--border); pointer-events: none; }
+    .new-badge { position: absolute; top: .5rem; left: .5rem; background: var(--accent);
+                 color: #fff; border-radius: 4px; padding: .1rem .4rem; font-size: .7rem; font-weight: 700; }
+    .match-badge { position: absolute; top: .5rem; right: .5rem; background: var(--green);
+                   color: #fff; border-radius: 4px; padding: .1rem .4rem; font-size: .7rem; font-weight: 700; }
+
+    /* Also-on badges */
+    .also-on { display: flex; gap: .35rem; flex-wrap: wrap; margin: .35rem 0; }
+    .also-tag { background: var(--surface); border: 1px solid var(--accent); color: var(--accent);
+                border-radius: 4px; padding: .1rem .45rem; font-size: .68rem; text-decoration: none; }
+    .also-tag:hover { background: var(--accent); color: #fff; }
+
+    /* Notes */
+    .notes-area { width: 100%; background: var(--surface); border: 1px solid var(--border);
+                  color: var(--text); border-radius: 6px; padding: .4rem; font-size: .78rem;
+                  margin-top: .5rem; resize: vertical; min-height: 50px; }
+
+    /* Map */
+    .map-wrap { position: relative; width: 100%; height: calc(100vh - 57px - 40px); display: none; }
+    #map { height: 100%; width: 100%; }
+    .map-empty { position: absolute; inset: 0; z-index: 450; display: none; align-items: center; justify-content: center;
+                 background: rgba(15,17,23,.72); pointer-events: none; text-align: center; padding: 1rem; }
+
+    .listing-marker { --marker-bg: #151827; position: relative; background: var(--marker-bg); color: #fff; border: 2px solid rgba(255,255,255,.92);
+                      border-radius: 10px; padding: 4px 8px; font-size: 12px; font-weight: 700; line-height: 1.1;
+                      box-shadow: 0 5px 14px rgba(0,0,0,.45); text-align: center; }
+    .listing-marker.match { --marker-bg: #1f8f63; }
+    .listing-marker.fav { border-color: var(--gold); }
+    .listing-marker::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+                             top: 100%; border: 6px solid transparent; border-top-color: var(--marker-bg); }
+    .school-marker { background: #f7c94f; border-radius: 999px; width: 20px; height: 20px; border: 3px solid #fff;
+                     box-shadow: 0 4px 10px rgba(0,0,0,.35); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 4rem; color: var(--muted); }
+    .empty h3 { font-size: 1.1rem; margin-bottom: .5rem; }
+
+    /* Loading */
+    .spinner { width: 2rem; height: 2rem; border: 3px solid var(--border);
+               border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;
+               margin: 4rem auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 980px) {
+      #scrapeBtn { margin-left: 0; }
+      .layout { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - 57px); }
+      aside { border-right: none; border-bottom: 1px solid var(--border); max-height: 42vh; }
+      .map-wrap { height: 60vh; }
+    }
+
+    @media (max-width: 640px) {
+      header { padding: .85rem 1rem; }
+      header h1 { width: 100%; font-size: 1.05rem; }
+      .stat-pill { font-size: .72rem; padding: .2rem .6rem; }
+      .view-switcher { padding: .5rem; flex-wrap: wrap; }
+      .content-wrapper { padding: .75rem; }
+      #grid { grid-template-columns: 1fr; }
+      .card-actions { flex-wrap: wrap; }
+      a.view-link, .view-link.disabled-link { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 <span>Farnham</span> Home Finder</h1>
+  <div class="stat-pill">Matches: <b id="statMatched">—</b></div>
+  <div class="stat-pill">Unseen: <b id="statUnseen">—</b></div>
+  <div class="stat-pill">Favourites: <b id="statFavs">—</b></div>
+  <div class="stat-pill">Total: <b id="statTotal">—</b></div>
+  <div class="stat-pill">Mapped: <b id="statMapCoverage">—</b></div>
+  <div class="stat-pill">Dupes merged: <b id="statDupes">—</b></div>
+  <button id="scrapeBtn" onclick="triggerScrape()">▶ Scrape Now</button>
+</header>
+<div id="feedbackBar" class="feedback info" hidden></div>
+
+<div class="layout">
+  <aside>
+    <h2>Filters</h2>
+
+    <div class="filter-group">
+      <label>Show</label>
+      <div class="toggle-group">
+        <button class="toggle-btn active" data-filter="all"    onclick="setFilter('all',    this)">All</button>
+        <button class="toggle-btn"        data-filter="matches" onclick="setFilter('matches', this)">✓ Matches</button>
+        <button class="toggle-btn"        data-filter="fav"     onclick="setFilter('fav',     this)">★ Saved</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="toggle-label">
+        <input type="checkbox" id="hideSeenCheck" checked onchange="applyFilters()">
+        Hide seen listings
+      </label>
+    </div>
+
+    <div class="filter-group">
+      <label>Source</label>
+      <select id="sourceFilter" onchange="applyFilters()">
+        <option value="">All sources</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Max price: <span class="price-display" id="priceLabel">Any</span></label>
+      <input type="range" id="priceFilter" min="200000" max="2000000" step="25000" value="2000000" oninput="updatePrice()">
+    </div>
+
+    <div class="filter-group">
+      <label>Min bedrooms</label>
+      <select id="bedsFilter" onchange="applyFilters()">
+        <option value="">Any</option>
+        <option value="3" selected>3+</option>
+        <option value="4">4+</option>
+        <option value="5">5+</option>
+      </select>
+    </div>
+  </aside>
+
+  <div style="display:flex; flex-direction:column; overflow:hidden;">
+    <div class="view-switcher">
+      <button class="view-btn active" onclick="setView('grid', this)">⊞ Grid</button>
+      <button class="view-btn"        onclick="setView('map',  this)">🗺 Map</button>
+    </div>
+    <main id="mainContent">
+      <div class="content-wrapper">
+        <div id="loading" class="spinner"></div>
+        <div id="grid"></div>
+      </div>
+      <div id="mapWrap" class="map-wrap">
+        <div id="map"></div>
+        <div id="mapEmpty" class="map-empty empty">
+          <div>
+            <h3>No geocoded homes yet</h3>
+            <p>Listings will appear here after location data is available.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+let allListings = [];
+let activeFilter = 'all';
+let mapInstance = null;
+let mapMarkers = [];
+let currentView = 'grid';
+let scrapePolling = false;
+let feedbackTimer = null;
+let listingsLoadError = '';
+let lastStats = null;
+let dashboardConfig = {};
+
+const SCRAPE_STATUS_URL = '/api/scrape/status';
+const SCRAPE_POLL_MS = 5000;
+const SCRAPE_TIMEOUT_MS = 20 * 60 * 1000;
+const DEFAULT_MAP_CENTRE = { lat: 51.2152435, lng: -0.7982083 };
+
+async function requestJson(url, options = {}, context = 'Request') {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (err) {
+    throw new Error(`${context} failed: network error (${err.message}).`);
+  }
+
+  const raw = await response.text();
+  let payload = null;
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      payload = raw;
+    }
+  }
+
+  if (!response.ok) {
+    const detail = payload && typeof payload === 'object'
+      ? (payload.error || payload.message || '')
+      : (typeof payload === 'string' ? payload : '');
+    throw new Error(`${context} failed (${response.status})${detail ? `: ${detail}` : ''}`);
+  }
+
+  return payload;
+}
+
+function setFeedback(message, type = 'info', persist = false) {
+  const bar = document.getElementById('feedbackBar');
+  if (!bar) return;
+  if (feedbackTimer) {
+    clearTimeout(feedbackTimer);
+    feedbackTimer = null;
+  }
+
+  if (!message) {
+    bar.textContent = '';
+    bar.hidden = true;
+    return;
+  }
+
+  bar.hidden = false;
+  bar.className = `feedback ${type}`;
+  bar.textContent = message;
+  if (!persist && type !== 'error') {
+    feedbackTimer = setTimeout(() => {
+      if (bar.textContent === message) {
+        bar.hidden = true;
+        bar.textContent = '';
+      }
+    }, 5000);
+  }
+}
+
+function clearFeedback() {
+  setFeedback('');
+}
+
+function safeUrl(raw) {
+  if (!raw) return '';
+  try {
+    const parsed = new URL(String(raw), window.location.origin);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+  } catch (_err) {}
+  return '';
+}
+
+function hasCoordinates(l) {
+  if (l.lat === null || l.lat === undefined || l.lng === null || l.lng === undefined) return false;
+  if (String(l.lat).trim() === '' || String(l.lng).trim() === '') return false;
+  const lat = Number(l.lat);
+  const lng = Number(l.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng);
+}
+
+function firstNumber(obj, keys) {
+  for (const key of keys) {
+    const value = obj ? obj[key] : null;
+    const n = Number(value);
+    if (value !== null && value !== undefined && Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function updateMapCoverage(stats = lastStats) {
+  const coverageEl = document.getElementById('statMapCoverage');
+  if (!coverageEl) return;
+
+  const total = firstNumber(stats, ['total', 'count']) ?? allListings.length ?? 0;
+  let mapped = firstNumber(stats, ['mapped', 'geocoded', 'geocoded_count', 'geocodedCount', 'withCoords', 'mapPoints']);
+  let pct = firstNumber(stats, ['mapCoveragePct', 'map_coverage_pct', 'coveragePct', 'geocodedPct', 'mapCoverage']);
+
+  if (mapped === null && Array.isArray(allListings) && allListings.length) {
+    mapped = allListings.filter(hasCoordinates).length;
+  }
+  if (pct !== null) {
+    pct = pct <= 1 ? Math.round(pct * 100) : Math.round(pct);
+  } else if (mapped !== null && total > 0) {
+    pct = Math.round((mapped / total) * 100);
+  }
+
+  if (total === 0) {
+    coverageEl.textContent = '0/0';
+    return;
+  }
+  if (mapped !== null && pct !== null) {
+    coverageEl.textContent = `${mapped}/${total} (${pct}%)`;
+    return;
+  }
+  if (mapped !== null) {
+    coverageEl.textContent = `${mapped}/${total}`;
+    return;
+  }
+  if (pct !== null) {
+    coverageEl.textContent = `${pct}%`;
+    return;
+  }
+  coverageEl.textContent = '—';
+}
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+
+async function init() {
+  setFeedback('Loading dashboard…', 'info');
+  try {
+    const cfg = await requestJson('/api/config', {}, 'Load config');
+    dashboardConfig = cfg && typeof cfg === 'object' ? cfg : {};
+    if (cfg && cfg.maxPrice) {
+      const slider = document.getElementById('priceFilter');
+      slider.value = cfg.maxPrice;
+      updatePrice(false);
+    }
+  } catch (err) {
+    setFeedback(err.message, 'error', true);
+  }
+
+  const [stats, listings] = await Promise.all([loadStats(), loadListings()]);
+  if (stats && listings !== null) clearFeedback();
+}
+
+async function loadStats(options = {}) {
+  const { silent = false } = options;
+  try {
+    const stats = await requestJson('/api/stats', {}, 'Load stats');
+    lastStats = stats && typeof stats === 'object' ? stats : {};
+    document.getElementById('statMatched').textContent = stats?.matched ?? '—';
+    document.getElementById('statUnseen').textContent  = stats?.unseen ?? '—';
+    document.getElementById('statFavs').textContent    = stats?.favourites ?? '—';
+    document.getElementById('statTotal').textContent   = stats?.total ?? '—';
+    document.getElementById('statDupes').textContent   = stats?.duplicates ?? 0;
+
+    const sel = document.getElementById('sourceFilter');
+    const existing = [...sel.options].map(o => o.value);
+    const sources = Array.isArray(stats?.sources) ? stats.sources : [];
+    sources.forEach(s => {
+      if (!existing.includes(s)) {
+        sel.add(new Option(s.charAt(0).toUpperCase() + s.slice(1), s));
+      }
+    });
+    updateMapCoverage(lastStats);
+    if (!silent && !scrapePolling && !listingsLoadError) clearFeedback();
+    return stats;
+  } catch (err) {
+    document.getElementById('statMatched').textContent = '—';
+    document.getElementById('statUnseen').textContent = '—';
+    document.getElementById('statFavs').textContent = '—';
+    document.getElementById('statTotal').textContent = '—';
+    document.getElementById('statDupes').textContent = '—';
+    document.getElementById('statMapCoverage').textContent = '—';
+    if (!silent) setFeedback(err.message, 'error', true);
+    return null;
+  }
+}
+
+async function loadListings(options = {}) {
+  const { silent = false } = options;
+  document.getElementById('loading').style.display = 'block';
+  listingsLoadError = '';
+  try {
+    const params = buildParams();
+    const url = '/api/listings' + (params ? `?${params}` : '');
+    const listings = await requestJson(url, {}, 'Load listings');
+    allListings = Array.isArray(listings) ? sortListings([...listings]) : [];
+    updateMapCoverage(lastStats);
+    render();
+    if (!silent && !scrapePolling) clearFeedback();
+    return allListings;
+  } catch (err) {
+    allListings = [];
+    listingsLoadError = err.message;
+    render();
+    if (!silent) setFeedback(err.message, 'error', true);
+    return null;
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+}
+
+function buildParams() {
+  const p = new URLSearchParams();
+  if (activeFilter === 'matches')  p.set('matches', '1');
+  if (activeFilter === 'fav')      p.set('favourite', '1');
+  // "Hide seen" checkbox sends unseen=1 to server
+  if (document.getElementById('hideSeenCheck')?.checked) p.set('unseen', '1');
+  const src = document.getElementById('sourceFilter').value;
+  if (src) p.set('source', src);
+  const beds = document.getElementById('bedsFilter').value;
+  if (beds) p.set('minBeds', beds);
+  const price = parseInt(document.getElementById('priceFilter').value);
+  if (price < 2000000) p.set('maxPrice', price);
+  return p.toString();
+}
+
+function compareListings(a, b) {
+  const seenDiff = Number(Boolean(a?.seen)) - Number(Boolean(b?.seen));
+  if (seenDiff !== 0) return seenDiff;
+
+  const matchDiff = Number(Boolean(b?.matches)) - Number(Boolean(a?.matches));
+  if (matchDiff !== 0) return matchDiff;
+
+  const aFirstSeen = String(a?.first_seen || '');
+  const bFirstSeen = String(b?.first_seen || '');
+  if (aFirstSeen !== bFirstSeen) return bFirstSeen.localeCompare(aFirstSeen);
+
+  return String(a?.id || '').localeCompare(String(b?.id || ''));
+}
+
+function sortListings(listings) {
+  return listings.sort(compareListings);
+}
+
+function isBadThumbnail(src) {
+  return /camera-|virtualtour|floorplan|chevron|brand\/|logo|\.svg(?:$|\?)/i.test(String(src || ''));
+}
+
+function getThumbnailSrc(listing) {
+  const candidate = listing?.thumbnail || '';
+  if (candidate && !isBadThumbnail(candidate)) return candidate;
+  return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180"><rect width="300" height="180" fill="%231e2135"/><text x="50%25" y="50%25" fill="%238892a4" font-size="14" text-anchor="middle" dy=".3em">No photo</text></svg>';
+}
+
+function getMapCentre() {
+  const lat = Number(dashboardConfig?.townCentre?.lat);
+  const lng = Number(dashboardConfig?.townCentre?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  return DEFAULT_MAP_CENTRE;
+}
+
+function getSchoolMarker() {
+  const lat = Number(dashboardConfig?.school?.lat);
+  const lng = Number(dashboardConfig?.school?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    lat,
+    lng,
+    name: dashboardConfig?.school?.name || 'School',
+  };
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+
+function render() {
+  if (currentView === 'grid') renderGrid();
+  else renderMap();
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  document.getElementById('mapWrap').style.display = 'none';
+  if (listingsLoadError) {
+    grid.innerHTML = `<div class="empty"><h3>Couldn’t load listings</h3><p>${escHtml(listingsLoadError)}</p></div>`;
+    return;
+  }
+  if (!allListings.length) {
+    grid.innerHTML = '<div class="empty"><h3>No listings found</h3><p>Try adjusting your filters or trigger a scrape.</p></div>';
+    return;
+  }
+  grid.innerHTML = allListings.map(l => cardHtml(l)).join('');
+}
+
+function cleanAddress(addr) {
+  if (!addr) return null;
+  return addr.replace(/[\r\n]+/g, ', ').replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim();
+}
+
+function cardHtml(l) {
+  const price = l.price ? '£' + l.price.toLocaleString('en-GB') : null;
+  const hasGeo = l.dist_school !== null;
+  const schoolDist = hasGeo ? `${l.dist_school.toFixed(1)} mi to school` : null;
+  const centreDist = l.dist_centre !== null ? `${l.dist_centre.toFixed(1)} mi to town` : null;
+  const schoolGood = hasGeo && l.dist_school <= 1.2;
+  const centreGood = l.dist_centre !== null && l.dist_centre <= 0.5;
+  const address = cleanAddress(l.address) || 'Address not shown';
+  const listingUrl = safeUrl(l.url);
+  const viewLink = listingUrl
+    ? `<a class="view-link" href="${escHtml(listingUrl)}" target="_blank" rel="noopener noreferrer">View →</a>`
+    : '<span class="view-link disabled-link">No link</span>';
+  const alsoOnHtml = Array.isArray(l.also_on)
+    ? l.also_on.map(d => {
+        const dupeUrl = safeUrl(d.url);
+        if (!dupeUrl) return '';
+        return `<a class="also-tag" href="${escHtml(dupeUrl)}" target="_blank" rel="noopener noreferrer">Also on ${escHtml(d.source)}</a>`;
+      }).filter(Boolean).join('')
+    : '';
+  const imgSrc = getThumbnailSrc(l);
+
+  return `<div class="card ${l.seen ? 'seen' : ''}" id="card-${l.id}">
+    ${!l.seen ? '<span class="new-badge">NEW</span>' : ''}
+    ${l.matches ? '<span class="match-badge">✓ MATCH</span>' : ''}
+    <img src="${escHtml(imgSrc)}" alt="property" loading="lazy" onerror="this.style.display='none'">
+    <div class="card-body">
+      <div class="card-source">${escHtml(l.source)}</div>
+      ${price ? `<div class="card-price">${price}</div>` : '<div class="card-price poa">Price on application</div>'}
+      <div class="card-address">${escHtml(address)}</div>
+      <div class="beds-type-row">
+        ${l.bedrooms ? `<span class="meta-pill">🛏 ${l.bedrooms} bed</span>` : ''}
+        ${l.prop_type ? `<span class="meta-pill">🏡 ${escHtml(l.prop_type)}</span>` : ''}
+      </div>
+      ${hasGeo ? `<div class="card-dist">
+        <span class="dist-tag ${schoolGood ? 'good' : ''}">${schoolDist}</span>
+        ${centreDist ? `<span class="dist-tag ${centreGood ? 'good' : ''}">${centreDist}</span>` : ''}
+      </div>` : ''}
+      ${alsoOnHtml ? `<div class="also-on">${alsoOnHtml}</div>` : ''}
+      <div class="card-actions">
+        <button class="btn-sm ${l.favourite ? 'fav' : ''}" onclick="toggleFav('${l.id}', this)">
+          ${l.favourite ? '★' : '☆'} Save
+        </button>
+        <button class="btn-sm ${l.seen ? 'seen-btn' : ''}" onclick="markSeen('${l.id}', this)">
+          ${l.seen ? '✓ Seen' : '○ Mark seen'}
+        </button>
+        ${viewLink}
+      </div>
+      <textarea class="notes-area" placeholder="Add notes..." onblur="saveNotes('${l.id}', this)">${escHtml(l.notes || '')}</textarea>
+    </div>
+  </div>`;
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+// ── Map ────────────────────────────────────────────────────────────────────
+
+function renderMap() {
+  document.getElementById('grid').style.display = 'none';
+  document.getElementById('mapWrap').style.display = 'block';
+
+  if (!mapInstance) {
+    const centre = getMapCentre();
+    mapInstance = L.map('map').setView([centre.lat, centre.lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(mapInstance);
+
+    const schoolMarker = getSchoolMarker();
+    if (schoolMarker) {
+      L.marker([schoolMarker.lat, schoolMarker.lng], {
+        icon: L.divIcon({ className: '', html: '<div class="school-marker"></div>', iconSize: [20, 20], iconAnchor: [10, 10] })
+      }).addTo(mapInstance).bindPopup(`<b>🏫 ${escHtml(schoolMarker.name)}</b>`);
+    }
+  }
+
+  // Clear old markers
+  mapMarkers.forEach(m => m.remove());
+  mapMarkers = [];
+
+  const withCoords = allListings.filter(hasCoordinates);
+  const mapEmpty = document.getElementById('mapEmpty');
+  if (!withCoords.length) {
+    const centre = getMapCentre();
+    mapEmpty.style.display = 'flex';
+    mapInstance.setView([centre.lat, centre.lng], 13);
+    requestAnimationFrame(() => mapInstance.invalidateSize());
+    return;
+  }
+  mapEmpty.style.display = 'none';
+
+  const bounds = [];
+  withCoords.forEach(l => {
+    const lat = Number(l.lat);
+    const lng = Number(l.lng);
+    const price = l.price ? '£' + l.price.toLocaleString('en-GB') : 'POA';
+    const markerClass = `listing-marker${l.matches ? ' match' : ''}${l.favourite ? ' fav' : ''}`;
+    const markerWidth = Math.max(62, Math.min(110, price.length * 8 + 20));
+    const listingUrl = safeUrl(l.url);
+    const popupAddress = escHtml(cleanAddress(l.address) || 'Address not shown');
+    const popupBeds = l.bedrooms ? `${escHtml(String(l.bedrooms))} bed` : '? bed';
+    const popupLink = listingUrl
+      ? `<a href="${escHtml(listingUrl)}" target="_blank" rel="noopener noreferrer">View listing →</a>`
+      : '<span>Listing URL unavailable</span>';
+
+    const marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div class="${markerClass}" style="width:${markerWidth}px;">${escHtml(price)}</div>`,
+        iconSize: [markerWidth, 42],
+        iconAnchor: [Math.round(markerWidth / 2), 42],
+        popupAnchor: [0, -34]
+      })
+    }).addTo(mapInstance);
+
+    marker.bindPopup(`
+      <b>${popupAddress}</b><br>
+      ${escHtml(price)} · ${popupBeds}<br>
+      ${popupLink}
+    `);
+    mapMarkers.push(marker);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length === 1) mapInstance.setView(bounds[0], 14);
+  else mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+  requestAnimationFrame(() => mapInstance.invalidateSize());
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+
+async function toggleFav(id, btn) {
+  try {
+    await requestJson(`/api/listings/${id}/favourite`, { method: 'POST' }, 'Update saved listing');
+    const listing = allListings.find(l => String(l.id) === String(id));
+    const wasFav = listing ? Boolean(listing.favourite) : btn?.classList.contains('fav');
+    const nowFav = !wasFav;
+
+    if (listing) listing.favourite = nowFav;
+    if (!nowFav && activeFilter === 'fav') {
+      allListings = allListings.filter(l => String(l.id) !== String(id));
+      setFeedback('Listing removed from Saved view.', 'info');
+    }
+    render();
+    loadStats({ silent: true });
+  } catch (err) {
+    setFeedback(err.message, 'error', true);
+  }
+}
+
+async function markSeen(id, btn) {
+  try {
+    await requestJson(`/api/listings/${id}/seen`, { method: 'POST' }, 'Mark listing seen');
+    const hideSeen = document.getElementById('hideSeenCheck')?.checked;
+    const listing = allListings.find(l => String(l.id) === String(id));
+    if (listing) listing.seen = true;
+    if (hideSeen) {
+      allListings = allListings.filter(l => String(l.id) !== String(id));
+    } else {
+      sortListings(allListings);
+    }
+    render();
+    loadStats({ silent: true });
+  } catch (err) {
+    setFeedback(err.message, 'error', true);
+  }
+}
+
+async function saveNotes(id, textarea) {
+  try {
+    await requestJson(`/api/listings/${id}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: textarea.value })
+    }, 'Save notes');
+    const listing = allListings.find(l => String(l.id) === String(id));
+    if (listing) listing.notes = textarea.value;
+  } catch (err) {
+    setFeedback(err.message, 'error', true);
+  }
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setScrapeButton(isRunning, label) {
+  const btn = document.getElementById('scrapeBtn');
+  btn.disabled = isRunning;
+  btn.classList.toggle('running', isRunning);
+  btn.textContent = label || (isRunning ? '⟳ Running...' : '▶ Scrape Now');
+}
+
+function parseScrapeStatus(payload) {
+  const state = String(payload?.status || payload?.state || '').toLowerCase();
+  const runningStates = ['running', 'in_progress', 'processing', 'pending', 'queued', 'started'];
+  const doneStates = ['completed', 'success', 'succeeded', 'finished'];
+  const failStates = ['failed', 'error'];
+  const running = payload?.running === true || runningStates.includes(state);
+  const complete = payload?.completed === true || payload?.done === true || doneStates.includes(state);
+  const failed = payload?.failed === true || Boolean(payload?.error) || failStates.includes(state);
+  const idle = state === 'idle' || state === 'ready';
+  const progress = Number(payload?.progressPct ?? payload?.progress ?? payload?.percent);
+  const eta = Number(payload?.etaSeconds ?? payload?.eta ?? payload?.secondsRemaining);
+  return {
+    running,
+    complete,
+    failed,
+    idle,
+    progress: Number.isFinite(progress) ? progress : null,
+    etaSeconds: Number.isFinite(eta) ? eta : null,
+    message: payload?.message || payload?.detail || payload?.error || ''
+  };
+}
+
+function scrapeButtonLabel(status) {
+  const parts = [];
+  if (status.progress !== null) parts.push(`${Math.round(status.progress)}%`);
+  if (status.etaSeconds !== null && status.etaSeconds > 0) parts.push(`~${Math.ceil(status.etaSeconds / 60)}m`);
+  return parts.length ? `⟳ ${parts.join(' · ')}` : '⟳ Running...';
+}
+
+async function pollScrapeUntilDone() {
+  const startedAt = Date.now();
+  let sawRunning = false;
+  let transientErrors = 0;
+
+  while (Date.now() - startedAt < SCRAPE_TIMEOUT_MS) {
+    try {
+      const payload = await requestJson(SCRAPE_STATUS_URL, {}, 'Check scrape status');
+      const status = parseScrapeStatus(payload);
+      transientErrors = 0;
+
+      if (status.failed) {
+        throw new Error(status.message || 'Scrape failed.');
+      }
+      if (status.running) sawRunning = true;
+      if (status.complete || (sawRunning && status.idle)) {
+        return status;
+      }
+
+      setScrapeButton(true, scrapeButtonLabel(status));
+      if (status.message) setFeedback(status.message, 'info', true);
+      await loadStats({ silent: true });
+    } catch (err) {
+      transientErrors += 1;
+      if (transientErrors >= 3) throw err;
+      setFeedback(`Waiting for scrape status… (${err.message})`, 'info', true);
+    }
+    await wait(SCRAPE_POLL_MS);
+  }
+  throw new Error('Scrape timed out before completion.');
+}
+
+async function triggerScrape() {
+  if (scrapePolling) return;
+  scrapePolling = true;
+  setScrapeButton(true, '⟳ Starting...');
+  setFeedback('Starting scrape…', 'info', true);
+  try {
+    await requestJson('/api/scrape', { method: 'POST' }, 'Start scrape');
+    const status = await pollScrapeUntilDone();
+    await Promise.all([loadStats({ silent: true }), loadListings({ silent: true })]);
+    setFeedback(status.message || 'Scrape completed and listings refreshed.', 'success');
+  } catch (err) {
+    setFeedback(err.message || 'Scrape failed.', 'error', true);
+  } finally {
+    scrapePolling = false;
+    setScrapeButton(false, '▶ Scrape Now');
+  }
+}
+
+// ── Filter controls ────────────────────────────────────────────────────────
+
+function setFilter(name, btn) {
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter = name;
+  loadListings();
+}
+
+function applyFilters() { loadListings(); }
+
+function updatePrice(shouldApply = true) {
+  const val = parseInt(document.getElementById('priceFilter').value);
+  const label = val >= 2000000 ? 'Any' : '£' + val.toLocaleString('en-GB');
+  document.getElementById('priceLabel').textContent = label;
+  if (shouldApply) applyFilters();
+}
+
+function setView(view, btn) {
+  currentView = view;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (view === 'grid') {
+    document.getElementById('grid').style.display = 'grid';
+    document.getElementById('mapWrap').style.display = 'none';
+    renderGrid();
+  } else {
+    renderMap();
+    requestAnimationFrame(() => mapInstance?.invalidateSize());
+  }
+}
+
+init();
+</script>
+</body>
+</html>

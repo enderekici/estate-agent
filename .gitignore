@@ -1,0 +1,13 @@
+node_modules/
+data/
+.env
+.env.*
+!.env.example
+coverage/
+coverage*/
+*.log
+.DS_Store
+.idea/
+.claude/
+dist/
+deploy.config

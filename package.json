@@ -1,0 +1,26 @@
+{
+  "name": "farnham-home-finder",
+  "version": "1.0.0",
+  "description": "Automated property search aggregator for Farnham, Surrey",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "scrape": "node src/cli/scrape.js",
+    "dashboard": "node src/dashboard/server.js",
+    "setup": "node setup.js",
+    "ci:syntax": "node scripts/ci-syntax-check.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "ci:smoke": "node scripts/ci-smoke.js",
+    "backfill:geo": "node scripts/backfill-geocodes.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.66.0",
+    "playwright": "^1.44.0"
+  }
+}
