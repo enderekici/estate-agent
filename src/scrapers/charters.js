@@ -46,6 +46,13 @@ async function scrape() {
   const seenUrls = new Set();
   try {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
+
+    // Dismiss OneTrust cookie consent if shown
+    try {
+      const btn = await page.$('#onetrust-accept-btn-handler, [id*="accept"], button[class*="accept"]');
+      if (btn) { await btn.click(); await page.waitForTimeout(1500); }
+    } catch (_) {}
+
     try {
       await page.waitForSelector('a[href*="/property-for-sale/"]', { timeout: 15000 });
     } catch (_) {}
