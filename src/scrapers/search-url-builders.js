@@ -129,6 +129,21 @@ function buildWinkworthUrl() {
   return `https://www.winkworth.co.uk/${search.county.toLowerCase()}/${search.locationSlug}/properties-for-sale?${params.toString()}`;
 }
 
+function buildGascoignePeesUrl() {
+  const search = getSearchParams();
+  const parts = [search.location, search.county].filter(Boolean).join('-').toLowerCase();
+  return `https://www.gpees.co.uk/buy/search/${parts}/`;
+}
+
+function buildBurnsAndWebberUrl() {
+  const search = getSearchParams();
+  const params = new URLSearchParams({
+    attr: '1',
+    currentpage: '1',
+  });
+  return `https://burnsandwebber.com/properties-for-sale-in/${search.locationSlug}/?${params.toString()}`;
+}
+
 function buildKeatsfearnUrl() {
   return 'https://www.keatsfearn.co.uk/properties/sales#/';
 }
@@ -153,8 +168,10 @@ module.exports = {
   buildAndrewLodgeUrl,
   buildBourneUrl,
   buildBridgesUrl,
+  buildBurnsAndWebberUrl,
   buildChartersUrl,
   buildCurchodsUrl,
+  buildGascoignePeesUrl,
   buildGreenwoodUrl,
   buildHamptonsUrl,
   buildKeatsfearnUrl,

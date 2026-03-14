@@ -25,6 +25,8 @@ const VALID_URL_PATTERNS = {
   charters:      /chartersestateagents\.co\.uk\/property-for-sale\//i,
   curchods:      /curchods\.com\/display\//i,
   wpr:           /wpr\.co\.uk\/properties\/sale\//i,
+  gascoignepees: /gpees\.co\.uk\/properties\/\d+\/sales\//i,
+  burnsandwebber: /burnsandwebber\.com\/display\//i,
 };
 
 function isValidPropertyUrl(source, url) {

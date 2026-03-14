@@ -6,7 +6,9 @@ const {
   buildAndrewLodgeUrl,
   buildBourneUrl,
   buildBridgesUrl,
+  buildBurnsAndWebberUrl,
   buildChartersUrl,
+  buildGascoignePeesUrl,
   buildGreenwoodUrl,
   buildHamptonsUrl,
   buildOnTheMarketUrl,
@@ -42,4 +44,6 @@ test('search url builders derive current scraper entry urls from shared params',
   assert.ok(buildGreenwoodUrl().includes('q=farnham'));
   assert.ok(buildAndrewLodgeUrl().includes('property-for-sale-in-farnham'));
   assert.ok(buildHamptonsUrl().includes('/text-farnham/from-3-bed'));
+  assert.ok(buildGascoignePeesUrl().includes('/buy/search/farnham-surrey/'));
+  assert.ok(buildBurnsAndWebberUrl().includes('/properties-for-sale-in/farnham/'));
 });
