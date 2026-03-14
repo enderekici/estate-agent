@@ -3,7 +3,7 @@ const { normalise, parsePrice, parseBeds, inferPropertyType } = require('./_loca
 const { buildGascoignePeesUrl } = require('./search-url-builders');
 
 const SOURCE = 'gascoignepees';
-const URL = buildGascoignePeesUrl();
+const BASE_URL = buildGascoignePeesUrl();
 const MAX_PAGES = 10;
 
 async function scrape() {
@@ -11,7 +11,7 @@ async function scrape() {
   const listings = [];
   const seenUrls = new Set();
   try {
-    await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
     await randomDelay();
 
     // Accept cookies if shown
