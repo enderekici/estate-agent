@@ -25,21 +25,19 @@ function buildOnTheMarketUrl() {
 }
 
 function buildZooplaUrl() {
+  return buildZooplaUrls()[0];
+}
+
+function buildZooplaUrls() {
   const search = getSearchParams();
   const params = new URLSearchParams({
     beds_min: String(search.minBedrooms || 0),
-    is_auction: 'false',
-    is_retirement_home: 'false',
-    is_shared_ownership: 'false',
-    property_sub_type: 'semi_detached',
-    search_source: 'for-sale',
-    tenure: 'freehold',
-    q: search.locationQuery,
   });
-  params.append('property_sub_type', 'detached');
-  params.append('property_sub_type', 'terraced');
   if (search.maxPrice) params.set('price_max', String(search.maxPrice));
-  return `https://www.zoopla.co.uk/for-sale/houses/${search.county.toLowerCase()}/${search.locationSlug}/?${params.toString()}`;
+
+  return search.postcodeDistricts.map((district) => (
+    `https://www.zoopla.co.uk/for-sale/property/${district.toLowerCase()}/?${params.toString()}`
+  ));
 }
 
 function buildRomansUrl() {
@@ -52,7 +50,11 @@ function buildRomansUrl() {
 
 function buildChartersUrl() {
   const search = getSearchParams();
-  return `https://www.chartersestateagents.co.uk/property/for-sale/in-${search.locationSlug}/${search.minBedrooms || 0}-and-more-bedrooms/`;
+  const params = new URLSearchParams({
+    min_beds: String(search.minBedrooms || 0),
+  });
+  if (search.maxPrice) params.set('max_price', String(search.maxPrice));
+  return `https://www.chartersestateagents.co.uk/property/for-sale/in-${search.locationSlug}/?${params.toString()}`;
 }
 
 function buildWprUrl() {
@@ -182,4 +184,5 @@ module.exports = {
   buildWinkworthUrl,
   buildWprUrl,
   buildZooplaUrl,
+  buildZooplaUrls,
 };

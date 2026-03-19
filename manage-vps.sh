@@ -40,7 +40,7 @@ run_logs() {
 run_status() {
   ssh -i "$SSH_KEY" "$SERVER" "cd $DEPLOY_DIR && docker compose -f docker-compose.prod.yml ps"
   echo ""
-  ssh -i "$SSH_KEY" "$SERVER" "node -e \"fetch('http://localhost:3000/api/config').then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2))).catch(e=>{console.error(e.message);process.exit(1)})\""
+  ssh -i "$SSH_KEY" "$SERVER" "if command -v jq >/dev/null 2>&1; then curl -fsS http://localhost:3000/api/config | jq .; else curl -fsS http://localhost:3000/api/config; fi"
 }
 
 run_restart() {

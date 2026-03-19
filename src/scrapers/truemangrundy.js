@@ -56,6 +56,10 @@ async function scrape() {
 
       if (countOnPage === 0) hasMore = false;
     } catch (err) {
+      if (pageNum > 1 && /HTTP 404/i.test(err.message || '')) {
+        hasMore = false;
+        break;
+      }
       console.error(`[${SOURCE}] Error (page ${pageNum}):`, err.message);
       hasMore = false;
     }

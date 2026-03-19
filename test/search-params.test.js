@@ -15,6 +15,7 @@ const {
   buildRomansUrl,
   buildWprUrl,
   buildZooplaUrl,
+  buildZooplaUrls,
 } = require('../src/scrapers/search-url-builders');
 
 test('search params expose the configured location profile', () => {
@@ -35,9 +36,13 @@ test('slugify normalizes location text for path-based search urls', () => {
 
 test('search url builders derive current scraper entry urls from shared params', () => {
   assert.ok(buildOnTheMarketUrl().includes('/property/farnham/'));
-  assert.ok(buildZooplaUrl().includes('/surrey/farnham/'));
+  assert.ok(buildZooplaUrl().includes('/property/gu9/'));
+  assert.deepEqual(buildZooplaUrls(), [
+    'https://www.zoopla.co.uk/for-sale/property/gu9/?beds_min=3&price_max=700000',
+    'https://www.zoopla.co.uk/for-sale/property/gu10/?beds_min=3&price_max=700000',
+  ]);
   assert.ok(buildRomansUrl().includes('/in-farnham/'));
-  assert.ok(buildChartersUrl().includes('/in-farnham/3-and-more-bedrooms/'));
+  assert.equal(buildChartersUrl(), 'https://www.chartersestateagents.co.uk/property/for-sale/in-farnham/?min_beds=3&max_price=700000');
   assert.ok(buildBridgesUrl().includes('destination=farnham'));
   assert.ok(buildWprUrl().includes('address_keyword=Farnham'));
   assert.ok(buildBourneUrl().includes('address_keyword=farnham'));
