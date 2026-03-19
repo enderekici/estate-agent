@@ -35,14 +35,26 @@ test('slugify normalizes location text for path-based search urls', () => {
 });
 
 test('search url builders derive current scraper entry urls from shared params', () => {
+  const search = getSearchParams();
   assert.ok(buildOnTheMarketUrl().includes('/property/farnham/'));
   assert.ok(buildZooplaUrl().includes('/property/gu9/'));
-  assert.deepEqual(buildZooplaUrls(), [
-    'https://www.zoopla.co.uk/for-sale/property/gu9/?beds_min=3&price_max=700000',
-    'https://www.zoopla.co.uk/for-sale/property/gu10/?beds_min=3&price_max=700000',
-  ]);
+  assert.deepEqual(
+    buildZooplaUrls(),
+    search.postcodeDistricts.map((district) => {
+      const params = new URLSearchParams({ beds_min: String(search.minBedrooms || 0) });
+      if (search.maxPrice) params.set('price_max', String(search.maxPrice));
+      return `https://www.zoopla.co.uk/for-sale/property/${district.toLowerCase()}/?${params.toString()}`;
+    })
+  );
   assert.ok(buildRomansUrl().includes('/in-farnham/'));
-  assert.equal(buildChartersUrl(), 'https://www.chartersestateagents.co.uk/property/for-sale/in-farnham/?min_beds=3&max_price=700000');
+  {
+    const params = new URLSearchParams({ min_beds: String(search.minBedrooms || 0) });
+    if (search.maxPrice) params.set('max_price', String(search.maxPrice));
+    assert.equal(
+      buildChartersUrl(),
+      `https://www.chartersestateagents.co.uk/property/for-sale/in-farnham/?${params.toString()}`
+    );
+  }
   assert.ok(buildBridgesUrl().includes('destination=farnham'));
   assert.ok(buildWprUrl().includes('address_keyword=Farnham'));
   assert.ok(buildBourneUrl().includes('address_keyword=farnham'));
