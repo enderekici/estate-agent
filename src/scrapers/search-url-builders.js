@@ -141,6 +141,12 @@ function buildBurnsAndWebberUrl() {
   const search = getSearchParams();
   const params = new URLSearchParams({
     attr: '1',
+    min: '0',
+    max: search.maxPrice ? String(search.maxPrice) : '0',
+    bmin: String(search.minBedrooms || 0),
+    bmax: '0',
+    sortby: 'HL',
+    added: 'anytime',
     currentpage: '1',
   });
   return `https://burnsandwebber.com/properties-for-sale-in/${search.locationSlug}/?${params.toString()}`;

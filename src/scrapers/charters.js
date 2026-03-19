@@ -5,6 +5,8 @@ const { buildChartersUrl } = require('./search-url-builders');
 const SOURCE = 'charters';
 const URL = buildChartersUrl();
 const MAX_PAGES = 10;
+const RESULT_SELECTOR = 'a[href*="/property-for-sale/"]';
+const COOKIE_SELECTOR = '#onetrust-accept-btn-handler, button#onetrust-accept-btn-handler, button:has-text("Accept"), [data-testid="dialog-accept-all"]';
 
 // Each property has TWO a[href*="/property-for-sale/"] elements with the same href:
 //   1) image link: has <img>, empty text
@@ -40,25 +42,49 @@ function parseChartersEntry({ href, text, imgSrc, imgAlt }) {
   return { price, bedrooms, prop_type, address, thumbnail: imgSrc };
 }
 
+async function dismissCookieBanner(page) {
+  try {
+    const btn = await page.$(COOKIE_SELECTOR);
+    if (btn) {
+      await btn.click();
+      await page.waitForTimeout(1200);
+    }
+  } catch (_) {}
+}
+
+async function waitForHydratedListings(page) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await dismissCookieBanner(page);
+    try {
+      await page.waitForSelector(RESULT_SELECTOR, { timeout: 4000 });
+    } catch (_) {}
+
+    const resultCount = await page.evaluate((selector) => {
+      return document.querySelectorAll(selector).length;
+    }, RESULT_SELECTOR).catch(() => 0);
+
+    if (resultCount > 0) return resultCount;
+    await page.waitForTimeout(1000);
+  }
+  return 0;
+}
+
 async function scrape() {
   const page = await newPage();
   const listings = [];
   const seenUrls = new Set();
   try {
     await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
-
-    // Dismiss OneTrust cookie consent if shown
-    try {
-      const btn = await page.$('#onetrust-accept-btn-handler, [id*="accept"], button[class*="accept"]');
-      if (btn) { await btn.click(); await page.waitForTimeout(1500); }
-    } catch (_) {}
-
-    try {
-      await page.waitForSelector('a[href*="/property-for-sale/"]', { timeout: 15000 });
-    } catch (_) {}
+    await waitForHydratedListings(page);
 
     let pageNum = 1;
     while (pageNum <= MAX_PAGES) {
+      await dismissCookieBanner(page);
+      if (!await waitForHydratedListings(page) && pageNum === 1) {
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 35000 });
+        await waitForHydratedListings(page);
+      }
+
       const pageData = await page.evaluate(() => {
         // Merge image link + text link by href
         const map = {};
@@ -82,7 +108,7 @@ async function scrape() {
           if (text.length > map[href].text.length) map[href].text = text;
         });
 
-        const nextEl = document.querySelector('a[rel="next"], .pagination a, a[href*="page/"]');
+        const nextEl = document.querySelector('a[rel="next"], a[aria-label*="next" i], .pagination a[rel="next"], a[href*="page/"][aria-label*="next" i]');
         const nextHref = nextEl?.href || null;
 
         return { results: Object.values(map), nextHref };
@@ -112,9 +138,7 @@ async function scrape() {
         pageNum++;
         await randomDelay();
         await page.goto(pageData.nextHref, { waitUntil: 'domcontentloaded', timeout: 35000 });
-        try {
-          await page.waitForSelector('a[href*="/property-for-sale/"]', { timeout: 15000 });
-        } catch (_) {}
+        await waitForHydratedListings(page);
       } catch (navErr) {
         console.warn(`[${SOURCE}] Pagination error on page ${pageNum}:`, navErr.message);
         break;

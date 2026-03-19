@@ -35,6 +35,7 @@ db.exec(`
     price_history TEXT DEFAULT '[]',
     first_seen  TEXT DEFAULT (datetime('now')),
     last_seen   TEXT DEFAULT (datetime('now')),
+    active      INTEGER DEFAULT 1,
     duplicate_of TEXT DEFAULT NULL
   );
 
@@ -56,6 +57,8 @@ db.exec(`
 
 // Add duplicate_of column if upgrading from older schema
 try { db.exec('ALTER TABLE listings ADD COLUMN duplicate_of TEXT DEFAULT NULL'); } catch (_) {}
+try { db.exec('ALTER TABLE listings ADD COLUMN active INTEGER DEFAULT 1'); } catch (_) {}
+db.exec('CREATE INDEX IF NOT EXISTS idx_listings_active ON listings(active)');
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -63,6 +66,7 @@ const stmtUpsert = db.prepare(`
   INSERT INTO listings (id, source, url, address, price, bedrooms, prop_type, thumbnail)
   VALUES (:id, :source, :url, :address, :price, :bedrooms, :prop_type, :thumbnail)
   ON CONFLICT(url) DO UPDATE SET
+    active = 1,
     last_seen = datetime('now'),
     price = CASE WHEN :price IS NOT NULL THEN :price ELSE listings.price END,
     price_history = CASE WHEN :price IS NOT NULL AND listings.price IS NOT NULL AND :price != listings.price
@@ -96,6 +100,42 @@ function updateGeo(id, lat, lng, distSchool, distCentre, matches) {
   `).run({ lat, lng, ds: distSchool, dc: distCentre, m: matches ? 1 : 0, id });
 }
 
+function reconcileSourceListings(source, activeUrls = []) {
+  const safeSource = String(source || '').trim();
+  if (!safeSource) return 0;
+
+  db.exec('BEGIN');
+  try {
+    let changed = 0;
+    if (activeUrls.length > 0) {
+      const placeholders = activeUrls.map(() => '?').join(', ');
+      changed += db.prepare(`
+        UPDATE listings
+        SET active = 1
+        WHERE source = ?
+          AND url IN (${placeholders})
+      `).run(safeSource, ...activeUrls).changes;
+      changed += db.prepare(`
+        UPDATE listings
+        SET active = 0, duplicate_of = NULL
+        WHERE source = ?
+          AND url NOT IN (${placeholders})
+      `).run(safeSource, ...activeUrls).changes;
+    } else {
+      changed += db.prepare(`
+        UPDATE listings
+        SET active = 0, duplicate_of = NULL
+        WHERE source = ?
+      `).run(safeSource).changes;
+    }
+    db.exec('COMMIT');
+    return changed;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
 /**
  * Cross-source deduplication: mark a listing as a duplicate of an existing one
  * when they have the same price + very similar address.
@@ -112,19 +152,24 @@ function normalizeAddressForDedupe(address) {
 }
 
 function deduplicateListings() {
+  db.prepare('UPDATE listings SET duplicate_of = NULL WHERE active = 1').run();
+
   // Strategy 1: Find listings with same price and bedrooms, check address similarity
   const priceBedCandidates = db.prepare(`
     SELECT a.id as aid, a.address as aaddr, a.source as asrc, a.first_seen as afirst,
-           a.prop_type as atype, a.thumbnail as athumb,
+           a.prop_type as atype, a.thumbnail as athumb, a.price as aprice, a.bedrooms as abeds,
            b.id as bid, b.address as baddr, b.source as bsrc, b.first_seen as bfirst,
-           b.prop_type as btype, b.thumbnail as bthumb
+           b.prop_type as btype, b.thumbnail as bthumb, b.price as bprice, b.bedrooms as bbeds
     FROM listings a JOIN listings b
       ON a.price = b.price
       AND a.bedrooms = b.bedrooms
+      AND a.source != b.source
       AND (
         a.first_seen < b.first_seen OR
         (a.first_seen = b.first_seen AND a.id < b.id)
       )
+      AND a.active = 1
+      AND b.active = 1
       AND a.duplicate_of IS NULL
       AND b.duplicate_of IS NULL
       AND a.price IS NOT NULL
@@ -144,6 +189,8 @@ function deduplicateListings() {
         a.first_seen < b.first_seen OR
         (a.first_seen = b.first_seen AND a.id < b.id)
       )
+      AND a.active = 1
+      AND b.active = 1
       AND a.duplicate_of IS NULL
       AND b.duplicate_of IS NULL
       AND a.address IS NOT NULL
@@ -158,14 +205,21 @@ function deduplicateListings() {
   const stmtBackfill = db.prepare(`
     UPDATE listings SET
       prop_type = CASE WHEN prop_type IS NULL AND ?1 IS NOT NULL THEN ?1 ELSE prop_type END,
-      thumbnail = CASE WHEN thumbnail IS NULL AND ?2 IS NOT NULL THEN ?2 ELSE thumbnail END
-    WHERE id=?3
+      thumbnail = CASE WHEN thumbnail IS NULL AND ?2 IS NOT NULL THEN ?2 ELSE thumbnail END,
+      price = CASE WHEN price IS NULL AND ?3 IS NOT NULL THEN ?3 ELSE price END,
+      bedrooms = CASE WHEN bedrooms IS NULL AND ?4 IS NOT NULL THEN ?4 ELSE bedrooms END,
+      address = CASE
+        WHEN address IS NULL AND ?5 IS NOT NULL THEN ?5
+        WHEN ?5 IS NOT NULL AND length(?5) > length(COALESCE(address, '')) THEN ?5
+        ELSE address
+      END
+    WHERE id=?6
   `);
 
   function markDuplicate(row) {
     if (alreadyMerged.has(row.bid)) return;
     stmtDup.run(row.aid, row.bid);
-    stmtBackfill.run(row.btype, row.bthumb, row.aid);
+    stmtBackfill.run(row.btype, row.bthumb, row.bprice ?? null, row.bbeds ?? null, row.baddr ?? null, row.aid);
     alreadyMerged.add(row.bid);
     merged++;
   }
@@ -205,19 +259,30 @@ function deduplicateListings() {
 }
 
 function getUngeocoded() {
-  return db.prepare('SELECT id, address FROM listings WHERE lat IS NULL AND duplicate_of IS NULL').all();
+  return db.prepare(`
+    SELECT id, address FROM listings
+    WHERE active = 1
+      AND lat IS NULL
+      AND duplicate_of IS NULL
+      AND address IS NOT NULL
+      AND NOT (address IS NULL AND price IS NULL)
+  `).all();
 }
 
 function getPendingNotifications() {
   return db.prepare(`
     SELECT * FROM listings
-    WHERE notified=0 AND matches=1 AND duplicate_of IS NULL
+    WHERE active=1
+      AND notified=0
+      AND matches=1
+      AND duplicate_of IS NULL
+      AND NOT (address IS NULL AND price IS NULL)
     ORDER BY first_seen DESC
   `).all();
 }
 
 function getAllListings(filters = {}) {
-  const clauses = ['duplicate_of IS NULL'];
+  const clauses = ['active=1', 'duplicate_of IS NULL', 'NOT (address IS NULL AND price IS NULL)'];
   const params = [];
 
   if (filters.matches !== undefined) {
@@ -261,11 +326,20 @@ function getListingStats() {
       COALESCE(SUM(CASE WHEN lat IS NOT NULL AND lng IS NOT NULL THEN 1 ELSE 0 END), 0) AS geocoded,
       COALESCE(SUM(CASE WHEN lat IS NULL OR lng IS NULL THEN 1 ELSE 0 END), 0) AS ungeocoded
     FROM listings
-    WHERE duplicate_of IS NULL
+    WHERE active=1
+      AND duplicate_of IS NULL
+      AND NOT (address IS NULL AND price IS NULL)
   `).get();
 
-  const duplicates = db.prepare('SELECT COUNT(*) AS n FROM listings WHERE duplicate_of IS NOT NULL').get().n;
-  const sources = db.prepare('SELECT DISTINCT source FROM listings WHERE duplicate_of IS NULL ORDER BY source').all()
+  const duplicates = db.prepare('SELECT COUNT(*) AS n FROM listings WHERE active=1 AND duplicate_of IS NOT NULL').get().n;
+  const sources = db.prepare(`
+    SELECT DISTINCT source
+    FROM listings
+    WHERE active=1
+      AND duplicate_of IS NULL
+      AND NOT (address IS NULL AND price IS NULL)
+    ORDER BY source
+  `).all()
     .map((row) => row.source);
 
   return {
@@ -301,6 +375,7 @@ module.exports = {
   getPendingNotifications,
   getAllListings,
   getListingStats,
+  reconcileSourceListings,
   deduplicateListings,
   normalizeAddressForDedupe,
   logRun,

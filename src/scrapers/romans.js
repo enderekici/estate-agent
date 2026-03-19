@@ -4,6 +4,17 @@ const { buildRomansUrl } = require('./search-url-builders');
 
 const SOURCE = 'romans';
 const BASE_URL = buildRomansUrl();
+const COOKIE_SELECTOR = '#onetrust-accept-btn-handler, button#onetrust-accept-btn-handler, button:has-text("Accept"), [data-testid="dialog-accept-all"]';
+
+async function dismissCookieBanner(page) {
+  try {
+    const btn = await page.$(COOKIE_SELECTOR);
+    if (btn) {
+      await btn.click();
+      await page.waitForTimeout(1000);
+    }
+  } catch (_) {}
+}
 
 // Romans usually embeds beds/type/address in URL slug.
 function parseFromSlug(url) {
@@ -55,18 +66,14 @@ async function scrape() {
   try {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await randomDelay();
-
-    // Dismiss cookie/consent banner if present
-    try {
-      const btn = await page.$('[id*="accept"], button[class*="accept"]');
-      if (btn) { await btn.click(); await page.waitForTimeout(1000); }
-    } catch (_) {}
+    await dismissCookieBanner(page);
 
     let pageNum = 1;
     let hasMore = true;
 
     while (hasMore && pageNum <= 10) {
       await page.waitForTimeout(1000);
+      await dismissCookieBanner(page);
 
       const raw = await page.evaluate(() => {
         // Romans property detail links use /properties-for-sale/ path
@@ -141,9 +148,22 @@ async function scrape() {
       });
 
       if (nextState === 'enabled') {
-        await page.click('button.next-btn');
+        const firstHref = await page.locator('a[href*="/properties-for-sale/"]').first().getAttribute('href').catch(() => null);
+        await dismissCookieBanner(page);
+        await page.locator('button.next-btn').click({ force: true });
         pageNum++;
         await randomDelay();
+        await dismissCookieBanner(page);
+        if (firstHref) {
+          try {
+            await page.waitForFunction((previousHref) => {
+              const first = document.querySelector('a[href*="/properties-for-sale/"]');
+              return Boolean(first && first.href && first.href !== previousHref);
+            }, firstHref, { timeout: 10000 });
+          } catch (_) {
+            await page.waitForTimeout(1500);
+          }
+        }
       } else {
         hasMore = false;
       }

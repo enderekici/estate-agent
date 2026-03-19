@@ -62,5 +62,20 @@ test('search url builders derive current scraper entry urls from shared params',
   assert.ok(buildAndrewLodgeUrl().includes('property-for-sale-in-farnham'));
   assert.ok(buildHamptonsUrl().includes('/text-farnham/from-3-bed'));
   assert.ok(buildGascoignePeesUrl().includes('/buy/search/farnham-surrey/'));
-  assert.ok(buildBurnsAndWebberUrl().includes('/properties-for-sale-in/farnham/'));
+  {
+    const params = new URLSearchParams({
+      attr: '1',
+      min: '0',
+      max: search.maxPrice ? String(search.maxPrice) : '0',
+      bmin: String(search.minBedrooms || 0),
+      bmax: '0',
+      sortby: 'HL',
+      added: 'anytime',
+      currentpage: '1',
+    });
+    assert.equal(
+      buildBurnsAndWebberUrl(),
+      `https://burnsandwebber.com/properties-for-sale-in/farnham/?${params.toString()}`
+    );
+  }
 });

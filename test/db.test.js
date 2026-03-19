@@ -47,6 +47,7 @@ function seedListing(dbModule, row) {
       matches = COALESCE(?, matches),
       seen = COALESCE(?, seen),
       favourite = COALESCE(?, favourite),
+      active = COALESCE(?, active),
       lat = ?,
       lng = ?,
       first_seen = COALESCE(?, first_seen),
@@ -56,6 +57,7 @@ function seedListing(dbModule, row) {
     row.matches ?? null,
     row.seen ?? null,
     row.favourite ?? null,
+    row.active ?? null,
     row.lat ?? null,
     row.lng ?? null,
     row.firstSeen ?? null,
@@ -240,6 +242,43 @@ test('source filter safely handles quote-like injection input', (t) => {
   assert.equal(rightmoveOnly[0].id, 'src-rightmove');
 });
 
+test('inactive and broken rows are hidden from listing queries and stats', (t) => {
+  const dbModule = createIsolatedDbModule(t);
+
+  seedListing(dbModule, {
+    id: 'visible-row',
+    source: 'rightmove',
+    url: 'https://rightmove.test/visible',
+    address: '10 South Street, Farnham, GU9',
+    price: 450000,
+    bedrooms: 3,
+  });
+  seedListing(dbModule, {
+    id: 'inactive-row',
+    source: 'zoopla',
+    url: 'https://zoopla.test/inactive',
+    address: '11 South Street, Farnham, GU9',
+    price: 455000,
+    bedrooms: 3,
+    active: 0,
+  });
+  seedListing(dbModule, {
+    id: 'broken-row',
+    source: 'gascoignepees',
+    url: 'https://gpees.test/broken',
+    address: null,
+    price: null,
+    bedrooms: 3,
+  });
+
+  const listings = dbModule.getAllListings();
+  assert.deepEqual(listings.map((listing) => listing.id), ['visible-row']);
+
+  const stats = dbModule.getListingStats();
+  assert.equal(stats.total, 1);
+  assert.deepEqual(stats.sources, ['rightmove']);
+});
+
 test('deduplicate chooses the listing with earliest first_seen as canonical', (t) => {
   const dbModule = createIsolatedDbModule(t);
 
@@ -272,7 +311,7 @@ test('deduplicate chooses the listing with earliest first_seen as canonical', (t
   assert.equal(earlyRow.duplicate_of, null);
 });
 
-test('deduplicate merges exact same-address listings even within the same source', (t) => {
+test('deduplicate does not merge exact same-address listings within the same source', (t) => {
   const dbModule = createIsolatedDbModule(t);
 
   seedListing(dbModule, {
@@ -295,13 +334,76 @@ test('deduplicate merges exact same-address listings even within the same source
   });
 
   const merged = dbModule.deduplicateListings();
-  assert.equal(merged, 1);
+  assert.equal(merged, 0);
 
   const earlier = dbModule.db.prepare('SELECT duplicate_of FROM listings WHERE id=?').get('same-source-earlier');
   const later = dbModule.db.prepare('SELECT duplicate_of FROM listings WHERE id=?').get('same-source-later');
 
   assert.equal(earlier.duplicate_of, null);
-  assert.equal(later.duplicate_of, 'same-source-earlier');
+  assert.equal(later.duplicate_of, null);
+});
+
+test('reconcileSourceListings deactivates missing source rows and clears stale duplicate markers', (t) => {
+  const dbModule = createIsolatedDbModule(t);
+
+  seedListing(dbModule, {
+    id: 'src-a',
+    source: 'gascoignepees',
+    url: 'https://gpees.test/a',
+    address: '1 River Lane, Farnham, GU9',
+    price: 350000,
+    bedrooms: 3,
+  });
+  seedListing(dbModule, {
+    id: 'src-b',
+    source: 'gascoignepees',
+    url: 'https://gpees.test/b',
+    address: null,
+    price: null,
+    bedrooms: 5,
+    duplicateOf: 'src-a',
+  });
+
+  dbModule.reconcileSourceListings('gascoignepees', ['https://gpees.test/a']);
+
+  const activeRows = dbModule.db.prepare('SELECT id, active, duplicate_of FROM listings ORDER BY id').all()
+    .map((row) => ({ ...row }));
+  assert.deepEqual(activeRows, [
+    { id: 'src-a', active: 1, duplicate_of: null },
+    { id: 'src-b', active: 0, duplicate_of: null },
+  ]);
+});
+
+test('deduplicate clears stale duplicate markers before recomputing', (t) => {
+  const dbModule = createIsolatedDbModule(t);
+
+  seedListing(dbModule, {
+    id: 'canonical',
+    source: 'rightmove',
+    url: 'https://rightmove.test/canonical',
+    address: '1 High Street, Farnham, GU9',
+    price: 500000,
+    bedrooms: 3,
+  });
+  seedListing(dbModule, {
+    id: 'former-duplicate',
+    source: 'zoopla',
+    url: 'https://zoopla.test/former-duplicate',
+    address: '9 Other Street, Farnham, GU9',
+    price: 650000,
+    bedrooms: 4,
+    duplicateOf: 'canonical',
+  });
+
+  const merged = dbModule.deduplicateListings();
+  assert.equal(merged, 0);
+
+  const rows = dbModule.db.prepare('SELECT id, duplicate_of FROM listings ORDER BY id').all()
+    .map((row) => ({ ...row }));
+  assert.deepEqual(rows, [
+    { id: 'canonical', duplicate_of: null },
+    { id: 'former-duplicate', duplicate_of: null },
+  ]);
 });
 
 test('upsert updates property type when a later scrape provides it', (t) => {

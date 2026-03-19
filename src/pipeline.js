@@ -1,4 +1,4 @@
-const { upsertListing, updateGeo, getUngeocoded, getPendingNotifications, isNew, markNotified, logRun, deduplicateListings } = require('./db');
+const { upsertListing, updateGeo, getUngeocoded, getPendingNotifications, isNew, markNotified, logRun, reconcileSourceListings, deduplicateListings } = require('./db');
 const { geocode, distanceToSchool, distanceToTownCentre, meetsLocationCriteria } = require('./geocoder');
 const { sendNewListing, sendSummary, sendError } = require('./telegram');
 const { runAll } = require('./scrapers/index');
@@ -100,16 +100,17 @@ async function runPipelineCore(startedAt) {
 
   let totalFound = 0;
   let totalNew   = 0;
+  let totalAccepted = 0;
   const sources  = [];
 
   try {
     const allResults = await runAll();
 
     for (const [source, listings] of Object.entries(allResults)) {
-      if (!listings.length) continue;
       sources.push(source);
-
       let newCount = 0;
+      let acceptedCount = 0;
+      const activeUrls = [];
       for (const listing of listings) {
         // Reject URLs that don't look like property detail pages
         if (!isValidPropertyUrl(source, listing.url)) continue;
@@ -121,14 +122,18 @@ async function runPipelineCore(startedAt) {
 
         const fresh = isNew(listing.url);
         upsertListing(listing);
+        activeUrls.push(listing.url);
+        acceptedCount++;
         if (fresh) newCount++;
       }
 
       totalFound += listings.length;
       totalNew   += newCount;
+      totalAccepted += acceptedCount;
 
+      reconcileSourceListings(source, activeUrls);
       logRun(source, startedAt, new Date().toISOString(), listings.length, newCount);
-      console.log(`  ${source}: ${listings.length} found, ${newCount} new`);
+      console.log(`  ${source}: ${listings.length} found, ${acceptedCount} kept, ${newCount} new`);
     }
 
     await geocodeNew();
@@ -139,8 +144,8 @@ async function runPipelineCore(startedAt) {
 
     await notifyMatches();
 
-    const stats = { total: totalFound, newMatches: totalNew, sources };
-    console.log(`\nDone. Total: ${totalFound} listings, ${totalNew} new.`);
+    const stats = { total: totalFound, accepted: totalAccepted, newMatches: totalNew, sources };
+    console.log(`\nDone. Total: ${totalFound} scraped, ${totalAccepted} kept, ${totalNew} new.`);
     if (totalNew > 0) await sendSummary(stats);
     return { ok: true, total: totalFound, newMatches: totalNew, sources };
 
