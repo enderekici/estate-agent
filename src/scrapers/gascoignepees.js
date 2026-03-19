@@ -39,35 +39,38 @@ async function scrape() {
     let pageNum = 1;
     while (pageNum <= MAX_PAGES) {
       const pageData = await page.evaluate(() => {
-        // Gascoigne Pees uses property cards with links to /properties/[id]/sales/[ref]
-        const links = Array.from(document.querySelectorAll('a[href*="/properties/"][href*="/sales/"]'));
+        const text = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+        // Gascoigne Pees renders one result per .card container.
+        const cards = Array.from(document.querySelectorAll('.results-page .card, .card--image.card--list .card'));
         const seen = new Set();
-        const results = links.map(a => {
-          const href = a.href;
+        const results = cards.map((card) => {
+          const linkEl = card.querySelector('a.card__link[href*="/properties/"][href*="/sales/"]')
+            || card.querySelector('a[href*="/properties/"][href*="/sales/"]');
+          const href = linkEl?.href || '';
           if (!href || seen.has(href) || !href.includes('/sales/')) return null;
           seen.add(href);
 
-          const card = a.closest('[class*="property"], [class*="listing"], article, li') || a.parentElement;
-          if (!card) return null;
-
-          const priceEl = card.querySelector('[class*="price"]');
-          const addressEl = card.querySelector('[class*="address"], [class*="location"], h2, h3');
-          const bedsEl = card.querySelector('[class*="bed"]');
+          const priceHeading = card.querySelector('.card__heading');
+          const priceQualifier = card.querySelector('.card__intro');
+          const titleEl = card.querySelector('.card__text-title');
+          const addressEl = card.querySelector('.card__text-content:not(.card__text-content--description)');
+          const descriptionEl = card.querySelector('.card__text-content--description');
+          const bedsEl = card.querySelector('.card-content__spec-list-item:first-child .card-content__spec-list-number');
+          const sourceEl = card.querySelector('picture source[srcset]');
+          const imgEl = card.querySelector('img.property-card-image, img');
 
           return {
             url:       href,
-            address:   addressEl?.textContent?.trim() || null,
-            price:     priceEl?.textContent?.trim() || null,
-            bedrooms:  bedsEl?.textContent?.trim() || null,
-            cardText:  card?.textContent?.replace(/\s+/g, ' ').trim() || null,
+            address:   text(addressEl?.textContent),
+            price:     text(`${priceHeading?.textContent || ''} ${priceQualifier?.textContent || ''}`),
+            bedrooms:  text(bedsEl?.textContent),
+            cardText:  text(`${titleEl?.textContent || ''} ${addressEl?.textContent || ''} ${descriptionEl?.textContent || ''}`),
             thumbnail: (() => {
-              const source = card.querySelector('picture source[srcset]');
-              if (source) {
-                const first = (source.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
+              if (sourceEl) {
+                const first = (sourceEl.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0];
                 if (first && !first.includes('.svg')) return first;
               }
-              const img = card.querySelector('img');
-              return img ? (img.currentSrc || img.src || img.getAttribute('data-src') || null) : null;
+              return imgEl ? (imgEl.currentSrc || imgEl.src || imgEl.getAttribute('data-src') || null) : null;
             })(),
           };
         }).filter(Boolean);
