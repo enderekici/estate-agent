@@ -6,6 +6,14 @@ const SOURCE = 'burnsandwebber';
 const BASE_URL = buildBurnsAndWebberUrl();
 const MAX_PAGES = 5;
 
+async function scrollForLazyLoad(page) {
+  await page.evaluate(() => {
+    const target = document.scrollingElement || document.documentElement || document.body;
+    if (!target) return;
+    window.scrollTo(0, target.scrollHeight || 0);
+  });
+}
+
 async function scrape() {
   const page = await newPage();
   const listings = [];
@@ -28,7 +36,7 @@ async function scrape() {
       }
 
       // Scroll to trigger lazy loading
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await scrollForLazyLoad(page);
       await page.waitForTimeout(1500);
 
       const raw = await page.evaluate(() => {

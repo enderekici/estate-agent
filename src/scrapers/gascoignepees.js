@@ -6,6 +6,14 @@ const SOURCE = 'gascoignepees';
 const BASE_URL = buildGascoignePeesUrl();
 const MAX_PAGES = 10;
 
+async function scrollForLazyLoad(page) {
+  await page.evaluate(() => {
+    const target = document.scrollingElement || document.documentElement || document.body;
+    if (!target) return;
+    window.scrollTo(0, target.scrollHeight || 0);
+  });
+}
+
 async function scrape() {
   const page = await newPage();
   const listings = [];
@@ -25,7 +33,7 @@ async function scrape() {
       await page.waitForSelector('[class*="property"], [class*="listing"], article', { timeout: 10000 });
     } catch (_) {}
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await scrollForLazyLoad(page);
     await page.waitForTimeout(2000);
 
     let pageNum = 1;
@@ -94,7 +102,7 @@ async function scrape() {
         try {
           await page.waitForSelector('a[href*="/properties/"][href*="/sales/"]', { timeout: 10000 });
         } catch (_) {}
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await scrollForLazyLoad(page);
         await page.waitForTimeout(2000);
       } catch (navErr) {
         console.warn(`[${SOURCE}] Pagination error on page ${pageNum}:`, navErr.message);
