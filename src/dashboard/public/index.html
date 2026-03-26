@@ -4,15 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farnham Home Finder</title>
+  <script>
+    // Apply theme before first paint to prevent flash
+    (function() {
+      var t = null;
+      try { t = localStorage.getItem('fhf-theme'); } catch(e) {}
+      if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      else if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    })();
+  </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
+      --bg: #f5f7fa; --surface: #ffffff; --card: #ffffff;
+      --border: #e2e8f0; --accent: #4f8ef7; --green: #16a34a;
+      --red: #dc2626; --gold: #d97706; --text: #1e293b; --muted: #64748b;
+      --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    [data-theme="dark"] {
       --bg: #0f1117; --surface: #1a1d2e; --card: #1e2135;
       --border: #2a2d4a; --accent: #4f8ef7; --green: #3ecf8e;
       --red: #f76b6b; --gold: #f7c94f; --text: #e2e8f0; --muted: #8892a4;
-      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f1117; --surface: #1a1d2e; --card: #1e2135;
+        --border: #2a2d4a; --accent: #4f8ef7; --green: #3ecf8e;
+        --red: #f76b6b; --gold: #f7c94f; --text: #e2e8f0; --muted: #8892a4;
+        --shadow: 0 1px 3px rgba(0,0,0,.3);
+      }
     }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
            background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
@@ -76,8 +99,11 @@
 
     /* Card */
     .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-             overflow: hidden; transition: transform .15s, box-shadow .15s; position: relative; }
-    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+             overflow: hidden; transition: transform .15s, box-shadow .15s; position: relative;
+             box-shadow: var(--shadow); }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+    [data-theme="dark"] .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.4); } }
     .card.seen { opacity: .65; }
     .card img { width: 100%; height: 180px; object-fit: cover; background: var(--surface); }
     .card-body { padding: .875rem; }
@@ -120,12 +146,20 @@
     .map-wrap { position: relative; width: 100%; height: calc(100vh - 57px - 40px); display: none; }
     #map { height: 100%; width: 100%; }
     .map-empty { position: absolute; inset: 0; z-index: 450; display: none; align-items: center; justify-content: center;
-                 background: rgba(15,17,23,.72); pointer-events: none; text-align: center; padding: 1rem; }
+                 background: rgba(245,247,250,.85); pointer-events: none; text-align: center; padding: 1rem; }
+    [data-theme="dark"] .map-empty { background: rgba(15,17,23,.72); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .map-empty { background: rgba(15,17,23,.72); } }
 
-    .listing-marker { --marker-bg: #151827; position: relative; background: var(--marker-bg); color: #fff; border: 2px solid rgba(255,255,255,.92);
+    .listing-marker { --marker-bg: #ffffff; --marker-text: #1e293b; position: relative; background: var(--marker-bg); color: var(--marker-text); border: 2px solid rgba(0,0,0,.15);
                       border-radius: 10px; padding: 4px 8px; font-size: 12px; font-weight: 700; line-height: 1.1;
-                      box-shadow: 0 5px 14px rgba(0,0,0,.45); text-align: center; }
-    .listing-marker.match { --marker-bg: #1f8f63; }
+                      box-shadow: 0 5px 14px rgba(0,0,0,.15); text-align: center; }
+    .listing-marker.match { --marker-bg: #16a34a; --marker-text: #fff; border-color: rgba(255,255,255,.92); }
+    [data-theme="dark"] .listing-marker { --marker-bg: #151827; --marker-text: #fff; border-color: rgba(255,255,255,.92); box-shadow: 0 5px 14px rgba(0,0,0,.45); }
+    [data-theme="dark"] .listing-marker.match { --marker-bg: #1f8f63; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .listing-marker { --marker-bg: #151827; --marker-text: #fff; border-color: rgba(255,255,255,.92); box-shadow: 0 5px 14px rgba(0,0,0,.45); }
+      :root:not([data-theme="light"]) .listing-marker.match { --marker-bg: #1f8f63; }
+    }
     .listing-marker.fav { border-color: var(--gold); }
     .listing-marker::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%);
                              top: 100%; border: 6px solid transparent; border-top-color: var(--marker-bg); }
@@ -141,6 +175,12 @@
                border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;
                margin: 4rem auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Theme toggle */
+    .theme-toggle { background: var(--card); border: 1px solid var(--border); color: var(--muted);
+                    border-radius: 8px; padding: .35rem .65rem; cursor: pointer; font-size: .82rem;
+                    display: flex; align-items: center; gap: .35rem; }
+    .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
     @media (max-width: 980px) {
       #scrapeBtn { margin-left: 0; }
@@ -171,6 +211,9 @@
   <div class="stat-pill">Total: <b id="statTotal">—</b></div>
   <div class="stat-pill">Mapped: <b id="statMapCoverage">—</b></div>
   <div class="stat-pill">Dupes merged: <b id="statDupes">—</b></div>
+  <button class="theme-toggle" id="themeToggle" onclick="cycleTheme()" title="Toggle theme">
+    <span id="themeIcon">☀️</span> <span id="themeLabel">Light</span>
+  </button>
   <button id="scrapeBtn" onclick="triggerScrape()">▶ Scrape Now</button>
 </header>
 <div id="feedbackBar" class="feedback info" hidden></div>
@@ -381,6 +424,52 @@ function updateMapCoverage(stats = lastStats) {
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 
+// ── Theme ───────────────────────────────────────────────────────────────
+const THEME_KEY = 'fhf-theme';
+const THEMES = ['auto', 'light', 'dark'];
+
+function getStoredTheme() {
+  try { return localStorage.getItem(THEME_KEY); } catch { return null; }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === 'dark') {
+    root.setAttribute('data-theme', 'dark');
+  } else if (theme === 'light') {
+    root.setAttribute('data-theme', 'light');
+  } else {
+    root.removeAttribute('data-theme');
+  }
+  updateThemeButton(theme);
+}
+
+function updateThemeButton(theme) {
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (!icon || !label) return;
+  if (theme === 'dark') {
+    icon.textContent = '🌙';
+    label.textContent = 'Dark';
+  } else if (theme === 'light') {
+    icon.textContent = '☀️';
+    label.textContent = 'Light';
+  } else {
+    icon.textContent = '⚙️';
+    label.textContent = 'Auto';
+  }
+}
+
+function cycleTheme() {
+  const current = getStoredTheme() || 'auto';
+  const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  applyTheme(next);
+}
+
+// Apply theme immediately on load
+applyTheme(getStoredTheme() || 'auto');
+
 async function init() {
   setFeedback('Loading dashboard…', 'info');
   try {
@@ -497,7 +586,11 @@ function isBadThumbnail(src) {
 function getThumbnailSrc(listing) {
   const candidate = listing?.thumbnail || '';
   if (candidate && !isBadThumbnail(candidate)) return candidate;
-  return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180"><rect width="300" height="180" fill="%231e2135"/><text x="50%25" y="50%25" fill="%238892a4" font-size="14" text-anchor="middle" dy=".3em">No photo</text></svg>';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+    (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const bgFill = isDark ? '%231e2135' : '%23e2e8f0';
+  const txtFill = isDark ? '%238892a4' : '%2364748b';
+  return `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180"><rect width="300" height="180" fill="${bgFill}"/><text x="50%25" y="50%25" fill="${txtFill}" font-size="14" text-anchor="middle" dy=".3em">No photo</text></svg>`;
 }
 
 function getMapCentre() {
